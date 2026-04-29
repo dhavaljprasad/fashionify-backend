@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database.init import init_mongo, close_mongo
+from app.utils.middleware import JWTAuthMiddleware
 from dotenv import load_dotenv
 
+from app.routes import router as api_router
 from app.routes.auth import router as auth_router
 
 load_dotenv()
@@ -33,6 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(JWTAuthMiddleware)
+
 
 @app.get("/")
 async def root():
@@ -45,6 +49,7 @@ async def ai_check():
 
 
 app.include_router(auth_router)
+app.include_router(api_router)
 
 
 if __name__ == "__main__":

@@ -1,13 +1,19 @@
 from typing import Callable, Awaitable
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.utils.auth import decode_access_token  # your helper
+from app.utils.auth import decode_access_token
 
+COOKIE_NAME = "access_token"
 
-PUBLIC_PREFIXES = "/auth"  # auth routes: login, register, etc.
+# Only backend API routes that should NOT require auth
+PUBLIC_PATHS = [
+    "/auth/sign-in",
+    "/auth/logout",
+    "/health",
+]
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -16,38 +22,40 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable],
     ):
-        # Let CORS preflight pass
+        # Allow CORS preflight requests
         if request.method == "OPTIONS":
             return await call_next(request)
 
         path = request.url.path
 
-        # Public routes (no auth)
-        if any(path.startswith(p) for p in PUBLIC_PREFIXES):
+        # Allow public routes
+        if any(path.startswith(p) for p in PUBLIC_PATHS):
             return await call_next(request)
 
-        # Extract Authorization header
-        auth_header = request.headers.get("authorization")
-        if not auth_header or not auth_header.lower().startswith("bearer "):
+        # 🔥 Read token from cookie
+        token = request.cookies.get(COOKIE_NAME)
+
+        if not token:
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Missing Authorization token"},
+                content={"detail": "Not authenticated"},
             )
 
-        token = auth_header.split(" ", 1)[1].strip()
-
-        # Validate token and decode payload
+        # 🔥 Validate token
         try:
-            payload = decode_access_token(
-                token
-            )  # should raise HTTPException(401) if invalid/expired
+            payload = decode_access_token(token)
+        except HTTPException as e:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": e.detail},
+            )
         except Exception:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or expired token"},
             )
 
-        # Attach to request.state so routes can read it
+        # Attach user payload to request
         request.state.user = payload
 
         return await call_next(request)

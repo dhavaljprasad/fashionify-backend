@@ -14,3 +14,8 @@ class ConfigVariables:
     JWT_SECRET: str = os.getenv("JWT_SECRET")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: str = os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM")
+
+    # Image Kit envs
+    IMGKIT_URL_ENDPOINT: str = os.getenv("IMGKIT_URL_ENDPOINT")
+    IMGKIT_PUBLIC_KEY: str = os.getenv("IMGKIT_PUBLIC_KEY")
+    IMGKIT_PRIVATE_KEY: str = os.getenv("IMGKIT_PRIVATE_KEY")

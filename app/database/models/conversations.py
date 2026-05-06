@@ -14,7 +14,7 @@ class Conversations(Document):
     user_id: PydanticObjectId
     conversation_id: PydanticObjectId = Field(default_factory=PydanticObjectId)
     entry_type: EntryType = EntryType.LINK
-    title: str = ""
+    title: str = "New Conversation"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

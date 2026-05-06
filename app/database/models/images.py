@@ -7,8 +7,7 @@ class Images(Document):
     image_id: PydanticObjectId = Field(default_factory=PydanticObjectId, index=True)
     user_id: PydanticObjectId
     conversation_id: PydanticObjectId
-    message_id: PydanticObjectId
-    image_path: str
+    image_name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:

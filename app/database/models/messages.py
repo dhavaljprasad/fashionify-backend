@@ -15,7 +15,7 @@ class Messages(Document):
     conversation_id: PydanticObjectId
     role: RoleType
     text: Optional[str] = None
-    image_id: Optional[PydanticObjectId] = None
+    image_ids: list[str] = []
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:

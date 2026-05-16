@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Request
-from app.database.queries.conversations import init_new_conversation_document
+from pydantic import BaseModel
+from urllib.parse import urlparse
+from app.database.queries.conversations import (
+    init_new_conversation_document,
+    update_conversation_type,
+)
 from app.database.queries.messages import add_image_message, get_all_message
 from app.database.queries.images import save_user_uploaded_images, get_bunch_images_name
+from app.database.queries.pooling import init_pooling_doc
 from app.utils.imgkit import get_client_upload_auth_params, get_user_uploaded_images
-from pydantic import BaseModel
+from app.workers.tasks import prestitched_seeon, link_seeon
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
@@ -16,6 +22,11 @@ class SaveImageRequest(BaseModel):
 class SelectTryOnRequest(BaseModel):
     conversation_id: str
     selected: str
+
+
+class SeeOnRequest(BaseModel):
+    conversation_id: str
+    link: str
 
 
 @router.get("/init")
@@ -38,6 +49,20 @@ async def get_conversation_id(request: Request):
 
     except Exception as e:
         print("Unexpected error occured generating conversation_id as :", e)
+        return None
+
+
+@router.get("/init-upload")
+async def get_upload_img_auth():
+    try:
+        # getting auth creds for imagekit, client image upload
+        imgkit_auth = get_client_upload_auth_params()
+
+        return {
+            "imgkit_auth": imgkit_auth,
+        }
+    except Exception as e:
+        print("Unexpected error occured getting img upload auth as:", e)
         return None
 
 
@@ -110,6 +135,66 @@ async def select_try_on(body: SelectTryOnRequest):
     except Exception as e:
         print("Unexpected error occured setting try-on as:", e)
         return {"status": "failure", "saved": False}
+
+
+@router.post("/see-on")
+async def see_on_generate_image(request: Request, body: SeeOnRequest):
+    try:
+        # getting user_id from request
+        user = request.state.user
+        user_id = user["id"]
+
+        # getting params from body
+        conversation_id = body.conversation_id
+        link = body.link
+
+        # `link` is your input string
+        parsed_url = urlparse(link)
+        domain = parsed_url.netloc.lower()
+
+        # Check if the link belongs to ImageKit
+        if "ik.imagekit.io" in domain:
+            updated_conversation_doc = await update_conversation_type(
+                conversation_id=conversation_id, conversation_type="prestitched"
+            )
+
+            new_pooling_doc = await init_pooling_doc(
+                user_id=user_id, pooling_type="see_on"
+            )
+
+            prestitched_seeon.delay(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                pooling_id=str(new_pooling_doc.pooling_id),
+                link=link,
+            )
+
+            if updated_conversation_doc and new_pooling_doc:
+                response = {
+                    "status": "success",
+                    "pooling_id": str(new_pooling_doc.pooling_id),
+                }
+                return response
+            else:
+                response = {"status": "faliure", "pooling_id": ""}
+                return response
+
+        else:
+            updated_conversation_doc = await update_conversation_type(
+                conversation_id=conversation_id, conversation_type="link"
+            )
+            new_pooling_doc = await init_pooling_doc(
+                user_id=user_id, pooling_type="see_on"
+            )
+            link_seeon.delay(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                pooling_id=str(new_pooling_doc.pooling_id),
+                link=link,
+            )
+
+    except Exception as e:
+        print("Unexpected error occured generating first see-on image as", e)
 
 
 @router.get("/{conversation_id}")

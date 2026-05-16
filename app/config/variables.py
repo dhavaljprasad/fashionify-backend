@@ -19,3 +19,6 @@ class ConfigVariables:
     IMGKIT_URL_ENDPOINT: str = os.getenv("IMGKIT_URL_ENDPOINT")
     IMGKIT_PUBLIC_KEY: str = os.getenv("IMGKIT_PUBLIC_KEY")
     IMGKIT_PRIVATE_KEY: str = os.getenv("IMGKIT_PRIVATE_KEY")
+
+    # Redis envs
+    REDIS_URL: str = os.getenv("REDIS_URL")

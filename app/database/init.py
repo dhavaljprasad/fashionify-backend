@@ -9,6 +9,7 @@ from app.database.models import (
     Messages,
     Images,
     Usage_Events,
+    Pooling,
 )
 
 _client: AsyncMongoClient | None = None
@@ -31,6 +32,7 @@ async def init_mongo():
             Messages,
             Images,
             Usage_Events,
+            Pooling,
         ],
     )
 

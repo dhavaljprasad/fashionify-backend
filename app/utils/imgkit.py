@@ -31,6 +31,22 @@ def get_user_uploaded_images(user_id: str, conversation_id: str, file_name: str)
         return None
 
 
+def get_user_generated_images(user_id: str, conversation_id: str, file_name: str):
+    try:
+        path = f"/{user_id}/generated/{conversation_id}/{file_name}"
+
+        url = imagekit.helper.build_url(
+            url_endpoint=ConfigVariables.IMGKIT_URL_ENDPOINT,
+            src=path,
+        )
+
+        return url
+
+    except Exception as e:
+        print("Unexpected error occured getting image URL:", e)
+        return None
+
+
 def upload_generated_see_on_image(
     user_id: str, conversation_id: str, file_name: str, b64_image: str
 ):
@@ -42,7 +58,7 @@ def upload_generated_see_on_image(
             file=image_bytes,
             file_name=file_name,
             folder=folder,
-            use_unique_file_name=True,
+            use_unique_file_name=False,
             overwrite_file=True,
         )
 

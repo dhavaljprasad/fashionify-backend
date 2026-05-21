@@ -4,6 +4,9 @@ from app.utils.imgkit import get_user_uploaded_images
 from app.ai.openai import generate_image
 from app.ai.prompts.user_see_on import user_see_on_prompt
 from app.utils.imgkit import upload_generated_see_on_image
+from app.database.queries.pooling import update_pooling_status
+from app.database.queries.messages import add_image_message
+from app.database.queries.images import save_user_uploaded_images
 
 
 @celery_app.task(bind=True, max_retries=0)
@@ -17,6 +20,12 @@ def prestitched_seeon(
             print("User_id: ", user_id)
             print("Link: ", link)
             print("Pooling_id: ", pooling_id)
+
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="pending",
+                data={},
+            )
 
             # ======================================================================
             # STEP1: Load the user image for this conversation
@@ -72,10 +81,35 @@ def prestitched_seeon(
                 "===== Uploaded the new Try On Image for this Conversation on Imgkit ====="
             )
 
-            print(response, "final response")
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="completed",
+                data={"see_on_image_url": response},
+            )
+
+            image_doc = await save_user_uploaded_images(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                image_name="generated_see_on.webp",
+            )
+
+            added_message = await add_image_message(
+                conversation_id=conversation_id,
+                role="ai",
+                text="Here's how the outfit looks on you!",
+                image_ids=[str(image_doc.image_id)],
+            )
+
+            if update_response and added_message:
+                print(response, "final response")
 
         except Exception as e:
             print("Unexpected worker error in prestitched_seeon as:", e)
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="failed",
+                data={"error": str(e)},
+            )
 
     return run_async(main_async_logic())
 

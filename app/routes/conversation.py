@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+from typing import Optional
 from urllib.parse import urlparse
 from app.database.queries.conversations import (
     init_new_conversation_document,
@@ -8,7 +9,11 @@ from app.database.queries.conversations import (
 from app.database.queries.messages import add_image_message, get_all_message
 from app.database.queries.images import save_user_uploaded_images, get_bunch_images_name
 from app.database.queries.pooling import init_pooling_doc
-from app.utils.imgkit import get_client_upload_auth_params, get_user_uploaded_images
+from app.utils.imgkit import (
+    get_client_upload_auth_params,
+    get_user_uploaded_images,
+    get_user_generated_images,
+)
 from app.workers.tasks import prestitched_seeon, link_seeon
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
@@ -27,6 +32,12 @@ class SelectTryOnRequest(BaseModel):
 class SeeOnRequest(BaseModel):
     conversation_id: str
     link: str
+
+
+class SaveSeeOnImageRequest(BaseModel):
+    conversation_id: str
+    file_name: Optional[str] = None
+    text: str
 
 
 @router.get("/init")
@@ -99,6 +110,47 @@ async def save_uploaded_image(request: Request, body: SaveImageRequest):
         )
 
         if image_doc and image_message_doc and ai_message_doc:
+            return {"status": "success", "saved": True}
+        else:
+            return {"status": "failure", "saved": False}
+
+    except Exception as e:
+        print(
+            "Unexpected error occured saving uploaded image and it's message for the conversation as:",
+            e,
+        )
+
+
+@router.post("/save-see-on-image")
+async def save_see_on_uploaded_image(request: Request, body: SaveSeeOnImageRequest):
+    try:
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
+        # de-structuring body
+        conversation_id = body.conversation_id
+        file_name = body.file_name
+        text = body.text
+
+        image_ids = []
+        if file_name:
+            # save user image
+            image_doc = await save_user_uploaded_images(
+                user_id=user_id, conversation_id=conversation_id, image_name=file_name
+            )
+            if image_doc:
+                image_ids = [str(image_doc.image_id)]
+
+        # save image message
+        image_message_doc = await add_image_message(
+            conversation_id=conversation_id,
+            role="user",
+            text=text,
+            image_ids=image_ids,
+        )
+
+        if image_message_doc:
             return {"status": "success", "saved": True}
         else:
             return {"status": "failure", "saved": False}
@@ -214,13 +266,25 @@ async def get_all_conversation_message(request: Request, conversation_id: str):
             if msg.image_ids:
                 image_names = await get_bunch_images_name(msg.image_ids) or []
 
-                image_urls = [
-                    get_user_uploaded_images(
-                        user_id=user_id, conversation_id=conversation_id, file_name=name
-                    )
-                    for name in image_names
-                    if name
-                ]
+                if msg.role == "user":
+                    image_urls = [
+                        get_user_uploaded_images(
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                            file_name=name,
+                        )
+                        for name in image_names
+                    ]
+                elif msg.role == "ai":
+                    image_urls = [
+                        get_user_generated_images(
+                            user_id=user_id,
+                            conversation_id=conversation_id,
+                            file_name=name,
+                        )
+                        for name in image_names
+                        if name
+                    ]
 
                 new_object = {"role": msg.role, "text": msg.text, "images": image_urls}
 

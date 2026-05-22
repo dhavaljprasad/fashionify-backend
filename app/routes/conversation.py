@@ -9,6 +9,7 @@ from app.database.queries.conversations import (
 from app.database.queries.messages import add_image_message, get_all_message
 from app.database.queries.images import save_user_uploaded_images, get_bunch_images_name
 from app.database.queries.pooling import init_pooling_doc
+from app.database.queries.conversations import get_all_conversations_by_user_id
 from app.utils.imgkit import (
     get_client_upload_auth_params,
     get_user_uploaded_images,
@@ -74,6 +75,31 @@ async def get_upload_img_auth():
         }
     except Exception as e:
         print("Unexpected error occured getting img upload auth as:", e)
+        return None
+
+
+@router.get("/user-conversations")
+async def get_all_user_conversations(request: Request):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+
+        user_conversations = await get_all_conversations_by_user_id(user_id=user_id)
+        print("user_conversations are:", user_conversations)
+        cleaned_conversations = []
+        for conversation in user_conversations:
+            cleaned_conversations.append(
+                {
+                    "conversation_id": str(conversation.conversation_id),
+                    "entry_type": conversation.entry_type,
+                    "title": conversation.title,
+                    "created_at": conversation.created_at,
+                    "updated_at": conversation.updated_at,
+                }
+            )
+        return {"status": "success", "conversations": cleaned_conversations}
+    except Exception as e:
+        print("Unexpected error occured getting all conversation for user as:", e)
         return None
 
 

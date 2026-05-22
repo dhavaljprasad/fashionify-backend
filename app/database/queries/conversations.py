@@ -28,3 +28,16 @@ async def update_conversation_type(conversation_id: str, conversation_type: Entr
     except Exception as e:
         print("Unexpected error occured updating the conversation document as:", e)
         return None
+
+
+async def get_all_conversations_by_user_id(user_id: str):
+    try:
+        conversation_docs = await Conversations.find(
+            Conversations.user_id == PydanticObjectId(user_id)
+        ).to_list()
+
+        return conversation_docs
+
+    except Exception as e:
+        print("Unexpected error occured getting all conversations for user as:", e)
+        return []

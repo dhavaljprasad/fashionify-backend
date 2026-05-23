@@ -117,7 +117,7 @@ def prestitched_seeon(
             added_message = await add_image_message(
                 conversation_id=conversation_id,
                 role="ai",
-                text="Here's how the outfit looks on you!",
+                text=gemini_response["outfit_description"],
                 image_ids=[str(image_doc.image_id)],
             )
 

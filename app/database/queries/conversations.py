@@ -45,11 +45,14 @@ async def update_conversation_title(conversation_id: str, title: str):
         return None
 
 
-async def get_all_conversations_by_user_id(user_id: str):
+async def get_conversations_by_user_id(user_id: str, limit: int = 20):
     try:
-        conversation_docs = await Conversations.find(
-            Conversations.user_id == PydanticObjectId(user_id)
-        ).to_list()
+        conversation_docs = await (
+            Conversations.find(Conversations.user_id == PydanticObjectId(user_id))
+            .sort("-updated_at")
+            .limit(limit)
+            .to_list()
+        )
 
         return conversation_docs
 

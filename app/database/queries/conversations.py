@@ -30,6 +30,21 @@ async def update_conversation_type(conversation_id: str, conversation_type: Entr
         return None
 
 
+async def update_conversation_title(conversation_id: str, title: str):
+    try:
+        conversation_doc = await Conversations.find_one(
+            Conversations.conversation_id == PydanticObjectId(conversation_id)
+        )
+
+        conversation_doc.title = title
+        await conversation_doc.save()
+        return conversation_doc
+
+    except Exception as e:
+        print("Unexpected error occured updating the conversation document as:", e)
+        return None
+
+
 async def get_all_conversations_by_user_id(user_id: str):
     try:
         conversation_docs = await Conversations.find(

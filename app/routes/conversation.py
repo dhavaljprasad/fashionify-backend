@@ -9,7 +9,7 @@ from app.database.queries.conversations import (
 from app.database.queries.messages import add_image_message, get_all_message
 from app.database.queries.images import save_user_uploaded_images, get_bunch_images_name
 from app.database.queries.pooling import init_pooling_doc
-from app.database.queries.conversations import get_all_conversations_by_user_id
+from app.database.queries.conversations import get_conversations_by_user_id
 from app.utils.imgkit import (
     get_client_upload_auth_params,
     get_user_uploaded_images,
@@ -84,7 +84,7 @@ async def get_all_user_conversations(request: Request):
         user = request.state.user
         user_id = user["id"]
 
-        user_conversations = await get_all_conversations_by_user_id(user_id=user_id)
+        user_conversations = await get_conversations_by_user_id(user_id=user_id)
         print("user_conversations are:", user_conversations)
         cleaned_conversations = []
         for conversation in user_conversations:

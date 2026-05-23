@@ -2,11 +2,15 @@ from app.workers.celery import celery_app
 from app.workers.runtime import run_async
 from app.utils.imgkit import get_user_uploaded_images
 from app.ai.openai import generate_image
-from app.ai.prompts.user_see_on import user_see_on_prompt
+from app.ai.gemini import call_gemini_llm
+from app.ai.prompts.user_see_on import user_see_on_prompt, gemini_see_on_prompt
 from app.utils.imgkit import upload_generated_see_on_image
 from app.database.queries.pooling import update_pooling_status
 from app.database.queries.messages import add_image_message
 from app.database.queries.images import save_user_uploaded_images
+from app.database.queries.conversations import update_conversation_title
+
+from pydantic import BaseModel
 
 
 @celery_app.task(bind=True, max_retries=0)
@@ -15,12 +19,10 @@ def prestitched_seeon(
 ):
     async def main_async_logic():
         try:
-            print("Worker running for PRESTITCHED SEE ON with the following creds:")
-            print("Conversation_id: ", conversation_id)
-            print("User_id: ", user_id)
-            print("Link: ", link)
-            print("Pooling_id: ", pooling_id)
-
+            # ======================================================================
+            # STEP1: Updating pooling status with pending
+            # ======================================================================
+            print("STEP1: Updating pooling status with pending")
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,
                 status="pending",
@@ -28,48 +30,41 @@ def prestitched_seeon(
             )
 
             # ======================================================================
-            # STEP1: Load the user image for this conversation
+            # STEP2: Load the user image for this conversation
             # ======================================================================
-
-            print("===== Loading User Image for this Conversation =====")
+            print("STEP2: Loading User Image for this Conversation")
             user_image_url = get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_image.webp",
             )
-            print("===== Loaded User Image for this Conversation =====")
 
             # ======================================================================
-            # STEP2: Load the user seeon image for this conversation
+            # STEP3: Load the user seeon image for this conversation
             # ======================================================================
-
-            print("===== Loading See On Image for this Conversation =====")
+            print("STEP3: Loading See On Image for this Conversation")
             see_on_image_url = get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_see_on_image.webp",
             )
-            print("===== Loaded See On Image for this Conversation =====")
 
             # ======================================================================
-            # STEP3: Generate the new Try On Image
+            # STEP4: Generate the new Try On Image
             # ======================================================================
-
-            print("===== Generating the new Try On Image for this Conversation =====")
+            print("STEP4: Generating the new Try On Image for this Conversation")
             image_64_bytes = generate_image(
                 model="gpt-image-1.5",
                 prompt=user_see_on_prompt,
                 image_urls=[user_image_url, see_on_image_url],
                 user_id=user_id,
             )
-            print("===== Generated the new Try On Image for this Conversation =====")
 
             # ======================================================================
-            # STEP4: Upload the new Try On Image
+            # STEP5: Upload the new Try On Image
             # ======================================================================
-
             print(
-                "===== Uploading the new Try On Image for this Conversation on Imgkit ====="
+                "STEP5: Uploading the new Try On Image for this Conversation on Imgkit"
             )
             response = upload_generated_see_on_image(
                 user_id=user_id,
@@ -77,16 +72,42 @@ def prestitched_seeon(
                 file_name="generated_see_on.webp",
                 b64_image=image_64_bytes,
             )
+
+            # ======================================================================
+            # STEP6: Defining the output schema for Gemini LLM
+            # ======================================================================
+            print("STEP6: Defining the output schema for Gemini LLM")
+
+            class GeminiSeeOnOutputSchema(BaseModel):
+                outfit_description: str
+                conversation_title: str
+
+            # ======================================================================
+            # STEP7: Calling Gemini API to get description and title
+            # ======================================================================
+            print("STEP7: Calling Gemini API to get description and title")
+            gemini_response = call_gemini_llm(
+                custom_prompt=gemini_see_on_prompt,
+                image_url=response["url"],
+                output_format="json",
+                output_schema=GeminiSeeOnOutputSchema,
+            )
+
+            # ======================================================================
+            # STEP8: Updating the conversation title
+            # ======================================================================
+            print("STEP8: Updating the conversation title")
+            updated_conversation_doc = await update_conversation_title(
+                conversation_id=conversation_id,
+                title=gemini_response["conversation_title"],
+            )
+
+            # ======================================================================
+            # STEP9: Saving the generated image in the images and messages collection
+            # ======================================================================
             print(
-                "===== Uploaded the new Try On Image for this Conversation on Imgkit ====="
+                "STEP9: Saving the generated image in the images and messages collection"
             )
-
-            update_response = await update_pooling_status(
-                pooling_id=pooling_id,
-                status="completed",
-                data={"see_on_image_url": response},
-            )
-
             image_doc = await save_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -100,7 +121,19 @@ def prestitched_seeon(
                 image_ids=[str(image_doc.image_id)],
             )
 
-            if update_response and added_message:
+            # ======================================================================
+            # STEP10: Updating the pooling status with completed and the new see on image url
+            # ======================================================================
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="completed",
+                data={
+                    "see_on_image_url": response["url"],
+                    "text": gemini_response["outfit_description"],
+                },
+            )
+
+            if update_response and added_message and updated_conversation_doc:
                 print(response, "final response")
 
         except Exception as e:

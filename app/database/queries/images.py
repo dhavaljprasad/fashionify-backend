@@ -29,3 +29,27 @@ async def get_bunch_images_name(image_ids: list[str]):
     except Exception as e:
         print("Unexpected error occured in mongo function fetching bunch images as", e)
         return None
+
+
+async def get_latest_user_images(user_id: str, limit: int = 10):
+    try:
+        images = (
+            await Images.find(
+                {
+                    "user_id": PydanticObjectId(user_id),
+                    "image_name": "user_image.webp",
+                }
+            )
+            .sort("-created_at")
+            .limit(limit)
+            .to_list()
+        )
+
+        return images
+
+    except Exception as e:
+        print(
+            "Unexpected error occured in mongo function fetching latest user images as",
+            e,
+        )
+        return None

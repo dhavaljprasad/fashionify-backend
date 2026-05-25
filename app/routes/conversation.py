@@ -258,6 +258,10 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
                 return response
 
         else:
+            print(
+                "The provided link does not belong to ImageKit. Proceeding with normal see-on flow."
+            )
+            print("Provided link:", link)
             updated_conversation_doc = await update_conversation_type(
                 conversation_id=conversation_id, conversation_type="link"
             )
@@ -270,6 +274,16 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
                 pooling_id=str(new_pooling_doc.pooling_id),
                 link=link,
             )
+
+            if updated_conversation_doc and new_pooling_doc:
+                response = {
+                    "status": "success",
+                    "pooling_id": str(new_pooling_doc.pooling_id),
+                }
+                return response
+            else:
+                response = {"status": "faliure", "pooling_id": ""}
+                return response
 
     except Exception as e:
         print("Unexpected error occured generating first see-on image as", e)

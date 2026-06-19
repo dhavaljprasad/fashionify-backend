@@ -7,7 +7,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Build deps for any compiled wheels + Playwright system deps
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential \
@@ -28,6 +27,8 @@ RUN apt-get update \
        libpangocairo-1.0-0 \
        libcairo2 \
        libasound2 \
+       ca-certificates \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -35,7 +36,7 @@ COPY requirements.txt .
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
-    && /opt/venv/bin/playwright install --only-deps chromium
+    && /opt/venv/bin/playwright install chromium
 
 FROM python:3.12-slim
 
@@ -45,7 +46,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Runtime libs for Chromium
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        libffi8 \
@@ -62,6 +62,8 @@ RUN apt-get update \
        libpangocairo-1.0-0 \
        libcairo2 \
        libasound2 \
+       ca-certificates \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system appuser \
     && adduser --system --ingroup appuser appuser

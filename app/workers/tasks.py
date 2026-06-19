@@ -9,6 +9,7 @@ from app.ai.prompts.user_see_on import (
     gemini_checking_cloth_prompt,
     gemini_see_on_link_prompt,
 )
+from app.ai.prompts.user_dress_up import gemini_user_dress_up_prompt
 from app.utils.imgkit import upload_generated_see_on_image
 from app.database.queries.pooling import update_pooling_status
 from app.database.queries.messages import add_image_message
@@ -314,6 +315,211 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
 
         except Exception as e:
             print("Unexpected worker error in prestitched_seeon as:", e)
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="failed",
+                data={"error": str(e)},
+            )
+
+    return run_async(main_async_logic())
+
+
+@celery_app.task(bind=True, max_retries=0)
+def dress_up(
+    self,
+    conversation_id: str,
+    user_id: str,
+    pooling_id: str,
+    images: str,
+    dress_name: str,
+    custom_instruction: str,
+):
+    async def main_async_logic():
+        try:
+            print(conversation_id, "=== Conversation Id")
+            print(images, "=== Images")
+            print(dress_name, "=== Dress Name")
+            print(custom_instruction, "=== Custom Instruction")
+            print(user_id, "=== User Id")
+            print(pooling_id, "=== Pooling Id")
+
+            # ======================================================================
+            # STEP1: Updating pooling status with pending
+            # ======================================================================
+            print("STEP1: Updating pooling status with pending")
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="pending",
+                data={},
+            )
+
+            # ======================================================================
+            # STEP2: Fetching fabric images from ImgKit
+            # ======================================================================
+            print("STEP2: Fetching fabric images from ImgKit")
+            fabric_images = []
+            for image in images:
+                fabric_image_url = get_user_uploaded_images(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    file_name=f"{image}.webp",
+                )
+                fabric_images.append(fabric_image_url)
+
+            print(fabric_images, "==========print")
+            # ======================================================================
+            # STEP3: Fetching model image from ImgKit
+            # ======================================================================
+            print("STEP3: Fetching model image from ImgKit")
+            model_image_url = get_user_uploaded_images(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                file_name="user_image.webp",
+            )
+
+            # ======================================================================
+            # STEP4: Creating ordered image array
+            # ======================================================================
+            print("STEP4: Creating ordered image array")
+            final_image_array = [model_image_url, *fabric_images]
+
+            # ======================================================================
+            # STEP5: Generating final image gen prompt
+            # ======================================================================
+            print("STEP5: Generating final image gen prompt")
+            image_reference_text = []
+
+            for index, image_name in enumerate(images):
+                position = index + 2
+
+                if position == 2:
+                    order = "second"
+                elif position == 3:
+                    order = "third"
+                elif position == 4:
+                    order = "fourth"
+                elif position == 5:
+                    order = "fifth"
+                else:
+                    order = f"{position}th"
+
+                garment_name = image_name.split(".")[0].replace("_", " ")
+
+                image_reference_text.append(
+                    f"The {order} image is a {garment_name} reference."
+                )
+
+            image_reference_text = "\n".join(image_reference_text)
+
+            prompt = f"""
+                I've attached {len(fabric_images) + 1} images.
+
+                The first image is of a model.
+
+                {image_reference_text}
+
+                Generate a photorealistic full-body image of the model wearing the supplied garments.
+
+                Preserve all colors, textures, embroidery, prints, stitching details and fabric characteristics exactly.
+
+                Construct a complete {dress_name} outfit using the supplied garment references.
+
+                Do not invent garments that were not supplied.
+
+                {custom_instruction or ""}
+            """.strip()
+
+            # ======================================================================
+            # STEP6: Generating final image
+            # ======================================================================
+            print("STEP6: Generating final image")
+            image_64_bytes = generate_image(
+                model="gpt-image-1.5",
+                prompt=prompt,
+                image_urls=final_image_array,
+                user_id=user_id,
+            )
+
+            # ======================================================================
+            # STEP7: Upload the new Dress Up Image
+            # ======================================================================
+            print(
+                "STEP7: Uploading the new Dress Up Image for this Conversation on Imgkit"
+            )
+            response = upload_generated_see_on_image(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                file_name="generated_see_on.webp",
+                b64_image=image_64_bytes,
+            )
+
+            # ======================================================================
+            # STEP9: Defining the output schema for Gemini LLM final response
+            # ======================================================================
+            print("STEP9: Defining the output schema for Gemini LLM final response")
+
+            class GeminiFinalResponseSchema(BaseModel):
+                outfit_description: str
+                conversation_title: str
+
+            # ======================================================================
+            # STEP10: Calling Gemini API to get description and title based on the generated see on image
+            # ======================================================================
+            print(
+                "STEP10: Calling Gemini API to get description and title based on the generated see on image"
+            )
+            gemini_response = call_gemini_llm(
+                custom_prompt=f"{gemini_user_dress_up_prompt}",
+                image_url=response["url"],
+                output_format="json",
+                output_schema=GeminiFinalResponseSchema,
+            )
+
+            # ======================================================================
+            # STEP11: Updating the conversation title
+            # ======================================================================
+            print("STEP11: Updating the conversation title")
+            updated_conversation_doc = await update_conversation_title(
+                conversation_id=conversation_id,
+                title=gemini_response["conversation_title"],
+            )
+
+            # ======================================================================
+            # STEP12: Saving the generated image in the images and messages collection
+            # ======================================================================
+            print(
+                "STEP12: Saving the generated image in the images and messages collection"
+            )
+            image_doc = await save_user_uploaded_images(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                image_name="generated_see_on.webp",
+            )
+
+            added_message = await add_image_message(
+                conversation_id=conversation_id,
+                role="ai",
+                text=gemini_response["outfit_description"],
+                image_ids=[str(image_doc.image_id)],
+            )
+
+            # ======================================================================
+            # STEP13: Updating the pooling status with completed and the new see on image url
+            # ======================================================================
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="completed",
+                data={
+                    "see_on_image_url": response["url"],
+                    "text": gemini_response["outfit_description"],
+                },
+            )
+
+            if update_response and added_message and updated_conversation_doc:
+                print(response, "final response")
+
+        except Exception as e:
+            print("Unexpected worker error in dress_up as: ", e)
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,
                 status="failed",

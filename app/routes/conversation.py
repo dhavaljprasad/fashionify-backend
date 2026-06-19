@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from urllib.parse import urlparse
 from app.database.queries.conversations import (
     init_new_conversation_document,
@@ -15,7 +15,7 @@ from app.utils.imgkit import (
     get_user_uploaded_images,
     get_user_generated_images,
 )
-from app.workers.tasks import prestitched_seeon, link_seeon
+from app.workers.tasks import prestitched_seeon, link_seeon, dress_up
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
@@ -35,10 +35,23 @@ class SeeOnRequest(BaseModel):
     link: str
 
 
+class DressUpRequest(BaseModel):
+    conversation_id: str
+    dress: str
+    uploaded_images: List[str]
+    custom_instruction: str
+
+
 class SaveSeeOnImageRequest(BaseModel):
     conversation_id: str
     file_name: Optional[str] = None
     text: str
+
+
+class SaveDressUpImagesRequest(BaseModel):
+    conversation_id: str
+    text: str
+    file_names: List[str] = []
 
 
 @router.get("/init")
@@ -72,6 +85,23 @@ async def get_upload_img_auth():
 
         return {
             "imgkit_auth": imgkit_auth,
+        }
+    except Exception as e:
+        print("Unexpected error occured getting img upload auth as:", e)
+        return None
+
+
+@router.get("/init-multiple-uploads/{number}")
+async def get_multiple_img_auth(number: int = 3):
+    try:
+        imgkit_auths = []
+        for _ in range(number):
+            imgkit_auth = get_client_upload_auth_params()
+            if imgkit_auth:
+                imgkit_auths.append(imgkit_auth)
+
+        return {
+            "imgkit_auths": imgkit_auths,
         }
     except Exception as e:
         print("Unexpected error occured getting img upload auth as:", e)
@@ -167,6 +197,53 @@ async def save_see_on_uploaded_image(request: Request, body: SaveSeeOnImageReque
             )
             if image_doc:
                 image_ids = [str(image_doc.image_id)]
+
+        # save image message
+        image_message_doc = await add_image_message(
+            conversation_id=conversation_id,
+            role="user",
+            text=text,
+            image_ids=image_ids,
+        )
+
+        if image_message_doc:
+            return {"status": "success", "saved": True}
+        else:
+            return {"status": "failure", "saved": False}
+
+    except Exception as e:
+        print(
+            "Unexpected error occured saving uploaded image and it's message for the conversation as:",
+            e,
+        )
+
+
+@router.post("/save-dress-up-images")
+async def save_dress_up_uploaded_images(
+    request: Request, body: SaveDressUpImagesRequest
+):
+    try:
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
+        # de-structuring body
+        conversation_id = body.conversation_id
+        file_names = body.file_names
+        text = body.text
+
+        image_ids = []
+
+        for file_doc in file_names:
+            if file_doc:
+                # save user image
+                image_doc = await save_user_uploaded_images(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    image_name=f"{file_doc}.webp",
+                )
+                if image_doc:
+                    image_ids.append(str(image_doc.image_id))
 
         # save image message
         image_message_doc = await add_image_message(
@@ -284,6 +361,51 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
             else:
                 response = {"status": "faliure", "pooling_id": ""}
                 return response
+
+    except Exception as e:
+        print("Unexpected error occured generating first see-on image as", e)
+
+
+@router.post("/dress-up")
+async def dress_up_generate_image(request: Request, body: DressUpRequest):
+    try:
+        # getting user_id from request
+        user = request.state.user
+        user_id = user["id"]
+
+        # getting params from body
+        conversation_id = body.conversation_id
+        dress_name = body.dress
+        images = body.uploaded_images
+        custom_instruction = body.custom_instruction
+
+        updated_conversation_doc = await update_conversation_type(
+            conversation_id=conversation_id, conversation_type="clothpiece"
+        )
+
+        # init pooling doc
+        new_pooling_doc = await init_pooling_doc(
+            user_id=user_id, pooling_type="dress_up"
+        )
+
+        dress_up.delay(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            pooling_id=str(new_pooling_doc.pooling_id),
+            images=images,
+            dress_name=dress_name,
+            custom_instruction=custom_instruction,
+        )
+
+        if updated_conversation_doc and new_pooling_doc:
+            response = {
+                "status": "success",
+                "pooling_id": str(new_pooling_doc.pooling_id),
+            }
+            return response
+        else:
+            response = {"status": "faliure", "pooling_id": ""}
+            return response
 
     except Exception as e:
         print("Unexpected error occured generating first see-on image as", e)

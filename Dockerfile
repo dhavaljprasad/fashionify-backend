@@ -7,18 +7,35 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Native build tooling is kept in the builder stage only, which covers
-# packages like cffi/cryptography if pip needs to compile them.
+# Build deps for any compiled wheels + Playwright system deps
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gcc libffi-dev \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       gcc \
+       libffi-dev \
+       curl \
+       wget \
+       libnss3 \
+       libatk1.0-0 \
+       libatk-bridge2.0-0 \
+       libdrm2 \
+       libxkbcommon0 \
+       libxdamage1 \
+       libxcomposite1 \
+       libxrandr2 \
+       libgbm1 \
+       libpango-1.0-0 \
+       libpangocairo-1.0-0 \
+       libcairo2 \
+       libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
-
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
+    && /opt/venv/bin/playwright install --only-deps chromium
 
 FROM python:3.12-slim
 
@@ -28,8 +45,23 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Runtime libs for Chromium
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libffi8 \
+    && apt-get install -y --no-install-recommends \
+       libffi8 \
+       libnss3 \
+       libatk1.0-0 \
+       libatk-bridge2.0-0 \
+       libdrm2 \
+       libxkbcommon0 \
+       libxdamage1 \
+       libxcomposite1 \
+       libxrandr2 \
+       libgbm1 \
+       libpango-1.0-0 \
+       libpangocairo-1.0-0 \
+       libcairo2 \
+       libasound2 \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system appuser \
     && adduser --system --ingroup appuser appuser

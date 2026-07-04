@@ -54,8 +54,8 @@ async def auth_signin(data: AuthSigninRequest):
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=True,  # True in prod
-            samesite="none",
+            secure=False,  # True in prod
+            samesite="lax",
             max_age=60 * 60 * 24 * 30,
             path="/",
         )

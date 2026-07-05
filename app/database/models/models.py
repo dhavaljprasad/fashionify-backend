@@ -8,9 +8,26 @@ class TypeOfGender(StrEnum):
     FEMALE = "female"
 
 
+class BodyType(StrEnum):
+    SLIM = "SLIM"
+    REGULAR = "REGULAR"
+    ATHLETIC = "ATHLETIC"
+    MUSCULAR = "MUSCULAR"
+    BROAD = "BROAD"
+    HEAVYSET = "HEAVYSET"
+
+
+class BodyShape(StrEnum):
+    HOURGLASS = "HOURGLASS"
+    PEAR = "PEAR"
+    APPLE = "APPLE"
+    RECTANGLE = "RECTANGLE"
+    INVERTED_TRIANGLE = "INVERTED_TRIANGLE"
+
+
 class MaleMeasurements(BaseModel):
     height: int
-    body_type: str
+    body_type: BodyType
     shoulder_width: float
     chest: float
     waist: float
@@ -22,7 +39,7 @@ class MaleMeasurements(BaseModel):
 
 class FemaleMeasurements(BaseModel):
     height: int
-    body_shape: str
+    body_shape: BodyShape
     shoulder_width: float
     bust: float
     underbust: float

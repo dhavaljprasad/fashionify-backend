@@ -71,3 +71,19 @@ def upload_generated_see_on_image(
     except Exception as e:
         print("Unexpected error occured saving generated see on image on imgkit as:", e)
         return None
+
+
+def get_user_model_image(user_id: str, file_name: str):
+    try:
+        path = f"/{user_id}/uploads/models/{file_name}"
+
+        url = imagekit.helper.build_url(
+            url_endpoint=ConfigVariables.IMGKIT_URL_ENDPOINT,
+            src=path,
+        )
+
+        return url
+
+    except Exception as e:
+        print("Unexpected error occured getting image URL:", e)
+        return None

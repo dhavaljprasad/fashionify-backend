@@ -4,6 +4,7 @@ from app.routes.imgkit import router as ImgKitRouter
 from app.routes.conversation import router as ConversationRouter
 from app.routes.pooling import router as PoolingRouter
 from app.routes.app import router as AppRouter
+from app.routes.model import router as ModelRouter
 
 router = APIRouter(prefix="/api", tags=["Protected Routes"])
 
@@ -11,3 +12,4 @@ router.include_router(ImgKitRouter)
 router.include_router(ConversationRouter)
 router.include_router(PoolingRouter)
 router.include_router(AppRouter)
+router.include_router(ModelRouter)

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from app.database.queries.images import get_latest_user_images
-from app.utils.imgkit import get_user_uploaded_images
+from app.database.queries.models import get_user_model_documents
+from app.utils.imgkit import get_user_uploaded_images, get_user_model_image
 
 router = APIRouter(prefix="/app", tags=["App"])
 
@@ -11,6 +12,7 @@ async def get_user_models(request: Request):
         user = request.state.user
         user_id = user["id"]
 
+        # Pre-uploaded user images (upto 20)
         user_images_docs = await get_latest_user_images(user_id=user_id, limit=20)
 
         user_images = []
@@ -23,9 +25,33 @@ async def get_user_models(request: Request):
             if img_url:
                 user_images.append(img_url)
 
+        # User Models if any
+        user_models_docs = await get_user_model_documents(user_id=user_id)
+
+        user_models = []
+        for model_doc in user_models_docs:
+            img_url = get_user_model_image(user_id=user_id, file_name=model_doc.image)
+            if model_doc.gender == "male":
+                model_object = {
+                    "name": model_doc.model_name,
+                    "image_url": img_url,
+                    "gender": "male",
+                    "measurements": model_doc.male_measurements,
+                }
+            elif model_doc.gender == "female":
+                model_object = {
+                    "name": model_doc.model_name,
+                    "image_url": img_url,
+                    "gender": "female",
+                    "measurements": model_doc.female_measurements,
+                }
+
+            user_models.append(model_object)
+            print(user_models, "=======user_models===========")
+
         return {
             "status": True,
-            "data": user_images,
+            "data": {"prev_images": user_images, "user_models": user_models},
             "details": "User models fetched successfully",
         }
 

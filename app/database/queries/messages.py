@@ -34,3 +34,20 @@ async def get_all_message(conversation_id: str):
     except Exception as e:
         print("Unexpted error occured in mongo function getting all msg as:", e)
         return None
+
+
+async def get_first_message(conversation_id: str):
+    try:
+        conv_id = PydanticObjectId(conversation_id)
+
+        message = (
+            await Messages.find(Messages.conversation_id == conv_id)
+            .sort("+timestamp")
+            .limit(1)
+            .first_or_none()
+        )
+
+        return message
+    except Exception as e:
+        print("Unexpected error occured in mongo function getting first message as:", e)
+        return None

@@ -23,6 +23,7 @@ router = APIRouter(prefix="/conversation", tags=["Conversation"])
 class SaveImageRequest(BaseModel):
     conversation_id: str
     file_name: str
+    message: Optional[str] = None
 
 
 class SelectTryOnRequest(BaseModel):
@@ -143,6 +144,7 @@ async def save_uploaded_image(request: Request, body: SaveImageRequest):
         # de-structuring body
         conversation_id = body.conversation_id
         file_name = body.file_name
+        message = body.message if body.message is not None else None
 
         # save user image
         image_doc = await save_user_uploaded_images(
@@ -153,7 +155,7 @@ async def save_uploaded_image(request: Request, body: SaveImageRequest):
         image_message_doc = await add_image_message(
             conversation_id=conversation_id,
             role="user",
-            text=None,
+            text=message,
             image_ids=[str(image_doc.image_id)],
         )
 

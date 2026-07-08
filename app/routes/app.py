@@ -6,7 +6,7 @@ from app.utils.imgkit import get_user_uploaded_images, get_user_model_image
 router = APIRouter(prefix="/app", tags=["App"])
 
 
-@router.get("/user-models")
+@router.get("/models-and-images")
 async def get_user_models(request: Request):
     try:
         user = request.state.user
@@ -36,14 +36,14 @@ async def get_user_models(request: Request):
                     "name": model_doc.model_name,
                     "image_url": img_url,
                     "gender": "male",
-                    "measurements": model_doc.male_measurements,
+                    "model_id": str(model_doc.model_id),
                 }
             elif model_doc.gender == "female":
                 model_object = {
                     "name": model_doc.model_name,
                     "image_url": img_url,
                     "gender": "female",
-                    "measurements": model_doc.female_measurements,
+                    "model_id": str(model_doc.model_id),
                 }
 
             user_models.append(model_object)

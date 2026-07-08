@@ -1,5 +1,6 @@
 from app.database.models import Models
 from app.database.models.models import MaleMeasurements, FemaleMeasurements
+from beanie import PydanticObjectId
 import traceback
 
 
@@ -94,3 +95,13 @@ async def get_user_model_documents(user_id: str):
         print("Unexpected error occured getting all user models as:", e)
         traceback.print_exc()
         return []
+
+
+async def get_model_document_by_id(model_id: str):
+    try:
+        model_doc = await Models.find_one(Models.model_id == PydanticObjectId(model_id))
+        return model_doc
+    except Exception as e:
+        print("Unexpected error occured getting model document by id as:", e)
+        traceback.print_exc()
+        return None

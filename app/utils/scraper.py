@@ -112,6 +112,80 @@ async def scrape_flipkart(page):
     }
 
 
+async def scrape_myntra(page):
+
+    product_type = None
+    product_image = None
+    product_size = None
+
+    # Product Type from <title>
+    try:
+        product_type = await page.title()
+    except Exception:
+        pass
+
+    # Product Image from itemprop="image"
+    try:
+        meta_image = page.locator('meta[itemprop="image"]')
+
+        if await meta_image.count():
+            product_image = await meta_image.get_attribute("content")
+    except Exception:
+        pass
+
+    # First Table (Optional)
+    try:
+        table = page.locator("table").first
+
+        if await table.count():
+            product_size = await extract_table_data(table)
+    except Exception:
+        pass
+
+    return {
+        "product_type": product_type,
+        "product_image": product_image,
+        "product_size": product_size,
+    }
+
+
+async def scrape_naykaa_fashion(page):
+
+    product_type = None
+    product_image = None
+    product_size = None
+
+    # Product Type from <title>
+    try:
+        product_type = await page.title()
+    except Exception:
+        pass
+
+    # Product Image from og:image
+    try:
+        meta_image = page.locator('meta[property="og:image"]')
+
+        if await meta_image.count():
+            product_image = await meta_image.get_attribute("content")
+    except Exception:
+        pass
+
+    # First Table (Optional)
+    try:
+        table = page.locator("table").first
+
+        if await table.count():
+            product_size = await extract_table_data(table)
+    except Exception:
+        pass
+
+    return {
+        "product_type": product_type,
+        "product_image": product_image,
+        "product_size": product_size,
+    }
+
+
 async def scrape_product(link: str):
 
     async with async_playwright() as p:
@@ -142,6 +216,12 @@ async def scrape_product(link: str):
 
             elif "flipkart." in link:
                 result = await scrape_flipkart(page)
+
+            elif "myntra." in link:
+                result = await scrape_myntra(page)
+
+            elif "nykaafashion." in link:
+                result = await scrape_naykaa_fashion(page)
 
             else:
                 raise ValueError(f"Unsupported website: {link}")

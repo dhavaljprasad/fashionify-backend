@@ -12,9 +12,10 @@ from app.ai.prompts.user_see_on import (
 from app.ai.prompts.user_dress_up import gemini_user_dress_up_prompt
 from app.utils.imgkit import upload_generated_see_on_image
 from app.database.queries.pooling import update_pooling_status
-from app.database.queries.messages import add_image_message
+from app.database.queries.messages import add_image_message, get_first_message
 from app.database.queries.images import save_user_uploaded_images
 from app.database.queries.conversations import update_conversation_title
+from app.database.queries.models import get_model_document_by_id
 from app.utils.scraper import scrape_product
 
 from pydantic import BaseModel
@@ -225,9 +226,30 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             )
 
             # ======================================================================
-            # STEP7: Generate the new Try On Image
+            # STEP7: Load the first text message as well if any
             # ======================================================================
-            print("STEP7: Generating the new Try On Image for this Conversation")
+            print("STEP7: Loading the first text message if any")
+            first_message_doc = await get_first_message(conversation_id=conversation_id)
+            first_text_message = first_message_doc.text
+            measurements = None
+
+            # ======================================================================
+            # STEP8: If first_text_message is a valid string, loading user model
+            # ======================================================================
+            print("STEP8: If first_text_message is valid string, loading user_model")
+            if first_text_message:
+                model_document = await get_model_document_by_id(
+                    model_id=first_text_message
+                )
+                if model_document.gender == "female":
+                    measurements = model_document.female_measurements
+                elif model_document.gender == "male":
+                    measurements = model_document.male_measurements
+
+            # ======================================================================
+            # STEP9: Generate the new Try On Image
+            # ======================================================================
+            print("STEP9: Generating the new Try On Image for this Conversation")
             image_64_bytes = generate_image(
                 model="gpt-image-1.5",
                 prompt=user_see_on_prompt,
@@ -236,10 +258,10 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             )
 
             # ======================================================================
-            # STEP8: Upload the new Try On Image
+            # STEP10: Upload the new Try On Image
             # ======================================================================
             print(
-                "STEP8: Uploading the new Try On Image for this Conversation on Imgkit"
+                "STEP10: Uploading the new Try On Image for this Conversation on Imgkit"
             )
             response = upload_generated_see_on_image(
                 user_id=user_id,
@@ -249,41 +271,41 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             )
 
             # ======================================================================
-            # STEP9: Defining the output schema for Gemini LLM final response
+            # STEP11: Defining the output schema for Gemini LLM final response
             # ======================================================================
-            print("STEP9: Defining the output schema for Gemini LLM final response")
+            print("STEP11: Defining the output schema for Gemini LLM final response")
 
             class GeminiFinalResponseSchema(BaseModel):
                 outfit_description: str
                 conversation_title: str
 
             # ======================================================================
-            # STEP10: Calling Gemini API to get description and title based on the generated see on image
+            # STEP12: Calling Gemini API to get description and title based on the generated see on image
             # ======================================================================
             print(
-                "STEP10: Calling Gemini API to get description and title based on the generated see on image"
+                "STEP12: Calling Gemini API to get description and title based on the generated see on image"
             )
             gemini_response = call_gemini_llm(
-                custom_prompt=f"{gemini_see_on_link_prompt} \n\n{json.dumps(scraped_data.get('product_size', ''))}",
+                custom_prompt=f"{gemini_see_on_link_prompt} \n\n Garment sizing chart:{json.dumps(scraped_data.get('product_size', ''))} \n\n User body measurements:{measurements}",
                 image_url=response["url"],
                 output_format="json",
                 output_schema=GeminiFinalResponseSchema,
             )
 
             # ======================================================================
-            # STEP11: Updating the conversation title
+            # STEP13: Updating the conversation title
             # ======================================================================
-            print("STEP11: Updating the conversation title")
+            print("STEP13: Updating the conversation title")
             updated_conversation_doc = await update_conversation_title(
                 conversation_id=conversation_id,
                 title=gemini_response["conversation_title"],
             )
 
             # ======================================================================
-            # STEP12: Saving the generated image in the images and messages collection
+            # STEP14: Saving the generated image in the images and messages collection
             # ======================================================================
             print(
-                "STEP12: Saving the generated image in the images and messages collection"
+                "STEP14: Saving the generated image in the images and messages collection"
             )
             image_doc = await save_user_uploaded_images(
                 user_id=user_id,
@@ -299,7 +321,7 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             )
 
             # ======================================================================
-            # STEP13: Updating the pooling status with completed and the new see on image url
+            # STEP15: Updating the pooling status with completed and the new see on image url
             # ======================================================================
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,

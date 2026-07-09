@@ -105,3 +105,46 @@ async def get_model_document_by_id(model_id: str):
         print("Unexpected error occured getting model document by id as:", e)
         traceback.print_exc()
         return None
+
+
+async def delete_model_document_by_id(model_id: str):
+    try:
+        model_doc = await Models.find_one(Models.model_id == PydanticObjectId(model_id))
+        if model_doc is None:
+            return False
+
+        await model_doc.delete()
+        return True
+    except Exception as e:
+        print("Unexpected error occured deleting model document by id as:", e)
+        traceback.print_exc()
+        return False
+
+
+async def update_model_measurements(
+    model_id: str,
+    gender: str,
+    measurements: MaleMeasurements | FemaleMeasurements,
+):
+    try:
+        model_doc = await Models.find_one(Models.model_id == PydanticObjectId(model_id))
+        if model_doc is None:
+            return None
+
+        normalized_measurements = _normalize_measurements(gender, measurements)
+
+        if gender == "male":
+            model_doc.male_measurements = normalized_measurements
+            model_doc.female_measurements = None
+        elif gender == "female":
+            model_doc.female_measurements = normalized_measurements
+            model_doc.male_measurements = None
+        else:
+            return None
+
+        await model_doc.save()
+        return model_doc
+    except Exception as e:
+        print("Unexpected error occured updating model measurements as:", e)
+        traceback.print_exc()
+        return None

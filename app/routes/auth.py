@@ -38,6 +38,8 @@ async def auth_signin(data: AuthSigninRequest):
             "email": saved_user.email,
             "image_url": saved_user.image_url,
             "type_of_user": saved_user.type_of_user,
+            "bussiness_name": saved_user.bussiness_name,
+            "bussiness_address": saved_user.bussiness_address,
         }
 
         access_token = create_access_token(token_data)

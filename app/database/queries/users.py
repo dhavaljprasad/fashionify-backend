@@ -1,5 +1,6 @@
 from app.database.init import Users
-from typing import Dict
+from typing import Dict, Optional
+from beanie import PydanticObjectId
 
 
 async def save_or_update_user(user_dict: Dict):
@@ -28,3 +29,27 @@ async def save_or_update_user(user_dict: Dict):
     except Exception as e:
         print("Unexpected error occured saving or updating user as:", e)
         return False
+
+
+async def update_user_profile(
+    user_id: str,
+    name: str,
+    type_of_user: str,
+    bussiness_name: Optional[str] = None,
+    bussiness_address: Optional[str] = None,
+):
+    try:
+        user = await Users.find_one(Users.user_id == PydanticObjectId(user_id))
+        if user is None:
+            return None
+
+        user.name = name
+        user.type_of_user = type_of_user
+        user.bussiness_name = bussiness_name
+        user.bussiness_address = bussiness_address
+
+        await user.save()
+        return user
+    except Exception as e:
+        print("Unexpected error occured updating user profile as:", e)
+        return None

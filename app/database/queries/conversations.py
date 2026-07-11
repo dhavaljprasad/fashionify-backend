@@ -61,3 +61,15 @@ async def get_conversations_by_user_id(user_id: str, limit: int = 20):
     except Exception as e:
         print("Unexpected error occured getting all conversations for user as:", e)
         return []
+
+
+async def get_conversation_doc(user_id: str, conversation_id: str):
+    try:
+        conversation_doc = await Conversations.find_one(
+            Conversations.user_id == PydanticObjectId(user_id),
+            Conversations.conversation_id == PydanticObjectId(conversation_id),
+        )
+        return conversation_doc
+    except Exception as e:
+        print("Unexpected error occured getting conversation_doc as e: ", e)
+        return None

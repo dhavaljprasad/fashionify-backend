@@ -53,3 +53,23 @@ async def get_latest_user_images(user_id: str, limit: int = 10):
             e,
         )
         return None
+
+
+async def get_all_user_images(user_id: str):
+    try:
+        images = (
+            await Images.find(
+                Images.user_id == PydanticObjectId(user_id),
+            )
+            .sort("-created_at")
+            .to_list()
+        )
+
+        return images
+
+    except Exception as e:
+        print(
+            "Unexpected error occured in mongo function fetching latest user images as",
+            e,
+        )
+        return None

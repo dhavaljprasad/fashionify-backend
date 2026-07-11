@@ -3,9 +3,11 @@ from app.database.models.conversations import EntryType
 from beanie import PydanticObjectId
 
 
-async def init_new_conversation_document(user_id: str):
+async def init_new_conversation_document(user_id: str, conversation_type: str):
     try:
-        new_conversation_doc = Conversations(user_id=user_id)
+        new_conversation_doc = Conversations(
+            user_id=user_id, conversation_type=conversation_type
+        )
         await new_conversation_doc.insert()
         return new_conversation_doc
     except Exception as e:

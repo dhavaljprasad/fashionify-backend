@@ -55,15 +55,17 @@ class SaveDressUpImagesRequest(BaseModel):
     file_names: List[str] = []
 
 
-@router.get("/init")
-async def get_conversation_id(request: Request):
+@router.get("/visualization/init")
+async def get_visualization_conversation_id(request: Request):
     try:
         # getting user_id from the request-payload
         user = request.state.user
         user_id = user["id"]
 
         # getting new conversation document
-        new_conversation_doc = await init_new_conversation_document(user_id=user_id)
+        new_conversation_doc = await init_new_conversation_document(
+            user_id=user_id, conversation_type="visualization"
+        )
 
         # getting auth creds for imagekit, client image upload
         imgkit_auth = get_client_upload_auth_params()
@@ -76,6 +78,25 @@ async def get_conversation_id(request: Request):
     except Exception as e:
         print("Unexpected error occured generating conversation_id as :", e)
         return None
+
+
+@router.get("/ai-stylist/init")
+async def get_stylist_conversation_id(request: Request):
+    try:
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
+        # getting new conversation document
+        new_conversation_doc = await init_new_conversation_document(
+            user_id=user_id, conversation_type="stylist"
+        )
+
+        return {
+            "conversation_id": str(new_conversation_doc.conversation_id),
+        }
+    except Exception as e:
+        print("Unexpected error occured generating conversation_id as: ", e)
 
 
 @router.get("/init-upload")

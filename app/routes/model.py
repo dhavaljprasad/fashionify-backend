@@ -7,7 +7,7 @@ from app.database.queries.models import (
     delete_model_document_by_id,
     update_model_measurements,
 )
-from app.utils.imgkit import get_user_model_image
+from app.utils.imgkit import get_user_model_image, get_client_upload_auth_params
 
 router = APIRouter(prefix="/model", tags=["User Models"])
 
@@ -84,6 +84,22 @@ async def get_user_models_function(request: Request):
         return {"status": "failure", "models": []}
 
 
+@router.get("/img-upload")
+async def get_image_auth_function(request: Request):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+
+        if user_id:
+            imgkit_auth = get_client_upload_auth_params()
+
+            return {
+                "imgkit_auth": imgkit_auth,
+            }
+    except Exception as e:
+        print("Unexpected error occured getting upload image auth as: ", e)
+
+
 @router.put("/update")
 async def update_user_model_measurements(request: Request, body: UpdateModelRequest):
     try:
@@ -127,6 +143,11 @@ async def update_user_model_measurements(request: Request, body: UpdateModelRequ
 @router.delete("/{model_id}")
 async def delete_user_model_function(request: Request, model_id: str):
     try:
+
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
         if not model_id:
             return {
                 "status": "failure",
@@ -134,7 +155,7 @@ async def delete_user_model_function(request: Request, model_id: str):
                 "details": "model_id is required",
             }
 
-        deleted = await delete_model_document_by_id(model_id=model_id)
+        deleted = await delete_model_document_by_id(model_id=model_id, user_id=user_id)
         if deleted:
             return {
                 "status": "success",

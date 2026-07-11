@@ -107,9 +107,11 @@ async def get_model_document_by_id(model_id: str):
         return None
 
 
-async def delete_model_document_by_id(model_id: str):
+async def delete_model_document_by_id(model_id: str, user_id: str):
     try:
-        model_doc = await Models.find_one(Models.model_id == PydanticObjectId(model_id))
+        model_doc = await Models.find_one(
+            Models.model_id == PydanticObjectId(model_id), Models.user_id == user_id
+        )
         if model_doc is None:
             return False
 
@@ -124,10 +126,13 @@ async def delete_model_document_by_id(model_id: str):
 async def update_model_measurements(
     model_id: str,
     gender: str,
+    user_id: str,
     measurements: MaleMeasurements | FemaleMeasurements,
 ):
     try:
-        model_doc = await Models.find_one(Models.model_id == PydanticObjectId(model_id))
+        model_doc = await Models.find_one(
+            Models.model_id == PydanticObjectId(model_id), Models.user_id == user_id
+        )
         if model_doc is None:
             return None
 

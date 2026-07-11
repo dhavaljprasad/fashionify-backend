@@ -137,7 +137,6 @@ async def get_all_user_conversations(request: Request):
         user_id = user["id"]
 
         user_conversations = await get_conversations_by_user_id(user_id=user_id)
-        print("user_conversations are:", user_conversations)
         cleaned_conversations = []
         for conversation in user_conversations:
             cleaned_conversations.append(
@@ -147,6 +146,8 @@ async def get_all_user_conversations(request: Request):
                     "title": conversation.title,
                     "created_at": conversation.created_at,
                     "updated_at": conversation.updated_at,
+                    "conversation_type": conversation.conversation_type
+                    or "visualization",
                 }
             )
         return {"status": "success", "conversations": cleaned_conversations}

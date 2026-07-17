@@ -47,7 +47,6 @@ async def get_user_models(request: Request):
                 }
 
             user_models.append(model_object)
-            print(user_models, "=======user_models===========")
 
         return {
             "status": True,

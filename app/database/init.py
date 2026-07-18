@@ -11,6 +11,7 @@ from app.database.models import (
     Usage_Events,
     Pooling,
     Models,
+    ComparisonAnalytics,
 )
 
 _client: AsyncMongoClient | None = None
@@ -35,6 +36,7 @@ async def init_mongo():
             Usage_Events,
             Pooling,
             Models,
+            ComparisonAnalytics,
         ],
     )
 

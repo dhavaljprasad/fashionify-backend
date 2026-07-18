@@ -16,6 +16,7 @@ class Generation(StrEnum):
     DRESS_UP = "dress_up"
     THREE_SIXTY = "three_sixty"
     ITERATION = "iteration"
+    COMPARISON = "comparison"
 
 
 class Pooling(Document):

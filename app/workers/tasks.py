@@ -10,13 +10,16 @@ from app.ai.prompts.user_see_on import (
     gemini_see_on_link_prompt,
 )
 from app.ai.prompts.user_dress_up import gemini_user_dress_up_prompt
+from app.ai.prompts.price_comparison import gemini_price_comparison_prompt
 from app.utils.imgkit import upload_generated_see_on_image
 from app.database.queries.pooling import update_pooling_status
 from app.database.queries.messages import add_image_message, get_first_message
 from app.database.queries.images import save_user_uploaded_images
 from app.database.queries.conversations import update_conversation_title
 from app.database.queries.models import get_model_document_by_id
+from app.database.queries.comparison_analytics import save_comparison_analytics
 from app.utils.scraper import scrape_product
+from app.utils.comparison_scraper import scrape_price_comparison
 
 from pydantic import BaseModel
 import json
@@ -160,11 +163,6 @@ def prestitched_seeon(
 def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: str):
     async def main_async_logic():
         try:
-            print(conversation_id, "conversation_id")
-            print(user_id, "user_id")
-            print(pooling_id, "pooling_id")
-            print(link, "link")
-
             # ======================================================================
             # STEP1: Updating pooling status with pending
             # ======================================================================
@@ -358,13 +356,6 @@ def dress_up(
 ):
     async def main_async_logic():
         try:
-            print(conversation_id, "=== Conversation Id")
-            print(images, "=== Images")
-            print(dress_name, "=== Dress Name")
-            print(custom_instruction, "=== Custom Instruction")
-            print(user_id, "=== User Id")
-            print(pooling_id, "=== Pooling Id")
-
             # ======================================================================
             # STEP1: Updating pooling status with pending
             # ======================================================================
@@ -388,7 +379,6 @@ def dress_up(
                 )
                 fabric_images.append(fabric_image_url)
 
-            print(fabric_images, "==========print")
             # ======================================================================
             # STEP3: Fetching model image from ImgKit
             # ======================================================================
@@ -542,6 +532,99 @@ def dress_up(
 
         except Exception as e:
             print("Unexpected worker error in dress_up as: ", e)
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="failed",
+                data={"error": str(e)},
+            )
+
+    return run_async(main_async_logic())
+
+
+@celery_app.task(bind=True, max_retries=0)
+def price_compare(self, product_url: str, user_id: str, pooling_id: str):
+    async def main_async_logic():
+        try:
+            print(product_url, "<=====product_url")
+            print(user_id, "<=====user_id")
+            print(pooling_id, "<=====pooling_id")
+
+            # ======================================================================
+            # STEP1: Updating pooling status with pending
+            # ======================================================================
+            print("STEP1: Updating pooling status with pending")
+            update_response = await update_pooling_status(
+                pooling_id=pooling_id,
+                status="pending",
+                data={},
+            )
+
+            # ======================================================================
+            # STEP2: Scraping the product data from the provided link
+            # ======================================================================
+            print("STEP2: Scraping the product data from the provided link")
+            scraped_data = await scrape_price_comparison(link=product_url)
+
+            # ======================================================================
+            # STEP3: Defining the output schema for Gemini LLM
+            # ======================================================================
+            print("STEP3: Defining the output schema for Gemini LLM")
+
+            class ComparisonTable(BaseModel):
+                brand_name: str
+                price: str
+                url: str
+
+            class GeminiProductScraper(BaseModel):
+                product_image_url: str
+                product_name: str
+                product_price: str
+                comparison_table: list[ComparisonTable]
+                recommendation_to_buy: bool
+                lowest_price: str
+                highest_price: str
+
+            # ======================================================================
+            # STEP4: Getting usable values out of the scraped data
+            # ======================================================================
+            print("STEP4: Getting usable values out of the scraped data")
+
+            custom_prompt = f"""
+            {gemini_price_comparison_prompt}
+
+            ========================================
+            SCRAPED HTML
+            ========================================
+
+            {scraped_data.model_dump_json(indent=2)}
+            """
+
+            gemini_comparison_result = call_gemini_llm(
+                custom_prompt=custom_prompt,
+                output_format="json",
+                output_schema=GeminiProductScraper,
+            )
+
+            print(gemini_comparison_result, "result ===========")
+
+            saved_comparison_doc = await save_comparison_analytics(
+                user_id=user_id,
+                searched_url=product_url,
+                comparison_result=gemini_comparison_result,
+            )
+
+            if gemini_comparison_result and saved_comparison_doc:
+                # ======================================================================
+                # STEP5: Updating the pooling status with completed and returning the response
+                # ======================================================================
+                await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="completed",
+                    data={"smart_compare": gemini_comparison_result},
+                )
+
+        except Exception as e:
+            print("Unexpected worker error in price_compare as: ", e)
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,
                 status="failed",

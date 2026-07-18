@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.database.init import init_mongo, close_mongo
-from app.utils.middleware import JWTAuthMiddleware
 from dotenv import load_dotenv
 import os
 
 loaded = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
+from app.database.init import init_mongo, close_mongo
+from app.utils.middleware import JWTAuthMiddleware
 from app.routes import router as api_router
 from app.routes.auth import router as auth_router
 

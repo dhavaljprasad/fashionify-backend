@@ -55,6 +55,11 @@ class SaveDressUpImagesRequest(BaseModel):
     file_names: List[str] = []
 
 
+class VisualizationIterationRequest(BaseModel):
+    conversation_id: str
+    message: str
+
+
 @router.get("/visualization/init")
 async def get_visualization_conversation_id(request: Request):
     try:
@@ -484,3 +489,17 @@ async def get_all_conversation_message(request: Request, conversation_id: str):
     except Exception as e:
         print("Unexpected error occured getting all message conversations as:", e)
         return {"status": "failure", "messages": []}
+
+
+@router.post("/visualization/iteration")
+async def visualization_iteration_function(
+    request: Request, body: VisualizationIterationRequest
+):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+    except Exception as e:
+        print(
+            f"Unexpected error occured in router visualization_iteration_function as {e}"
+        )
+        return None

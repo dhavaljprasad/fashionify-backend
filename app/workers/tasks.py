@@ -9,7 +9,10 @@ from app.ai.prompts.user_see_on import (
     gemini_checking_cloth_prompt,
     gemini_see_on_link_prompt,
 )
-from app.ai.prompts.user_dress_up import gemini_user_dress_up_prompt
+from app.ai.prompts.user_dress_up import (
+    gemini_user_dress_up_prompt,
+    gemini_final_prompt_generation_prompt,
+)
 from app.ai.prompts.price_comparison import gemini_price_comparison_prompt
 from app.utils.imgkit import upload_generated_see_on_image
 from app.database.queries.pooling import update_pooling_status
@@ -20,6 +23,7 @@ from app.database.queries.models import get_model_document_by_id
 from app.database.queries.comparison_analytics import save_comparison_analytics
 from app.utils.scraper import scrape_product
 from app.utils.comparison_scraper import scrape_price_comparison
+from app.ai.prompts.dress_up_config import DRESS_DESCRIPTIONS
 
 from pydantic import BaseModel
 import json
@@ -396,9 +400,23 @@ def dress_up(
             final_image_array = [model_image_url, *fabric_images]
 
             # ======================================================================
-            # STEP5: Generating final image gen prompt
+            # STEP5: Lookup DressDescription from config & making passing prompt
             # ======================================================================
-            print("STEP5: Generating final image gen prompt")
+            dress_config_description = DRESS_DESCRIPTIONS[dress_name]
+
+            # ======================================================================
+            # STEP6: Generating final pass-on prompt for image generation
+            # ======================================================================
+            print("STEP6: Generating final pass-on prompt for image generation")
+            custom_dress_description = call_gemini_llm(
+                custom_prompt=f"${gemini_final_prompt_generation_prompt}\n\nProduct Description:${dress_config_description} \n\nCustom User Prompt:${custom_instruction.strip()}",
+                output_format="text",
+            )
+
+            # ======================================================================
+            # STEP7: Generating final image gen prompt
+            # ======================================================================
+            print("STEP7: Generating final image gen prompt")
             image_reference_text = []
 
             for index, image_name in enumerate(images):
@@ -424,27 +442,67 @@ def dress_up(
             image_reference_text = "\n".join(image_reference_text)
 
             prompt = f"""
-                I've attached {len(fabric_images) + 1} images.
+                I've attached {len(final_image_array)} images.
 
-                The first image is of a model.
-
+                IMAGE REFERENCES:
+                The first image is the identity and composition reference for the subject.
                 {image_reference_text}
 
-                Generate a photorealistic full-body image of the model wearing the supplied garments.
+                TASK:
+                Create a realistic apparel visualization.
+                The subject should already be wearing the complete outfit described below.
 
-                Preserve all colors, textures, embroidery, prints, stitching details and fabric characteristics exactly.
+                OUTFIT SPECIFICATION:
+                {dress_name}:{custom_dress_description}
 
-                Construct a complete {dress_name} outfit using the supplied garment references.
+                GARMENT PRESERVATION RULES:
+                Use each garment reference only for its corresponding garment.
+                Preserve exactly:
+                - colors
+                - fabric
+                - texture
+                - embroidery
+                - prints
+                - stitching
+                - borders
+                - trims
+                - embellishments
+                - logos
+                - patterns
+                Do not redesign, simplify, replace, merge, or invent any garment.
 
-                Do not invent garments that were not supplied.
+                FIT & DRAPING:
+                Resize and naturally fit the supplied garments to the model's body while preserving their design.
+                Only adjust:
+                - scale
+                - draping
+                - folding
+                - natural fabric deformation
+                Do not alter the garment construction.
 
-                {custom_instruction or ""}
+                IDENTITY PRESERVATION:
+                The first image defines the subject.
+                Preserve exactly:
+                - face
+                - hairstyle
+                - body proportions
+                - pose
+                - camera angle
+                - framing
+                - crop
+                - perspective
+                - lighting
+                - background
+                Maintain the identity and composition from Image 1. Render the subject naturally wearing the supplied outfit.
+
+                SAFETY:
+                The subject should appear naturally and completely dressed in the finished outfit.                
             """.strip()
 
             # ======================================================================
-            # STEP6: Generating final image
+            # STEP8: Generating final image
             # ======================================================================
-            print("STEP6: Generating final image")
+            print("STEP8: Generating final image")
             image_64_bytes = generate_image(
                 model="gpt-image-1.5",
                 prompt=prompt,
@@ -453,10 +511,10 @@ def dress_up(
             )
 
             # ======================================================================
-            # STEP7: Upload the new Dress Up Image
+            # STEP9: Upload the new Dress Up Image
             # ======================================================================
             print(
-                "STEP7: Uploading the new Dress Up Image for this Conversation on Imgkit"
+                "STEP9: Uploading the new Dress Up Image for this Conversation on Imgkit"
             )
             response = upload_generated_see_on_image(
                 user_id=user_id,
@@ -466,19 +524,19 @@ def dress_up(
             )
 
             # ======================================================================
-            # STEP9: Defining the output schema for Gemini LLM final response
+            # STEP10: Defining the output schema for Gemini LLM final response
             # ======================================================================
-            print("STEP9: Defining the output schema for Gemini LLM final response")
+            print("STEP11: Defining the output schema for Gemini LLM final response")
 
             class GeminiFinalResponseSchema(BaseModel):
                 outfit_description: str
                 conversation_title: str
 
             # ======================================================================
-            # STEP10: Calling Gemini API to get description and title based on the generated see on image
+            # STEP11: Calling Gemini API to get description and title based on the generated see on image
             # ======================================================================
             print(
-                "STEP10: Calling Gemini API to get description and title based on the generated see on image"
+                "STEP11: Calling Gemini API to get description and title based on the generated see on image"
             )
             gemini_response = call_gemini_llm(
                 custom_prompt=f"{gemini_user_dress_up_prompt}",
@@ -488,19 +546,19 @@ def dress_up(
             )
 
             # ======================================================================
-            # STEP11: Updating the conversation title
+            # STEP12: Updating the conversation title
             # ======================================================================
-            print("STEP11: Updating the conversation title")
+            print("STEP12: Updating the conversation title")
             updated_conversation_doc = await update_conversation_title(
                 conversation_id=conversation_id,
                 title=gemini_response["conversation_title"],
             )
 
             # ======================================================================
-            # STEP12: Saving the generated image in the images and messages collection
+            # STEP13: Saving the generated image in the images and messages collection
             # ======================================================================
             print(
-                "STEP12: Saving the generated image in the images and messages collection"
+                "STEP13: Saving the generated image in the images and messages collection"
             )
             image_doc = await save_user_uploaded_images(
                 user_id=user_id,
@@ -516,7 +574,7 @@ def dress_up(
             )
 
             # ======================================================================
-            # STEP13: Updating the pooling status with completed and the new see on image url
+            # STEP14: Updating the pooling status with completed and the new see on image url
             # ======================================================================
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,
@@ -545,10 +603,6 @@ def dress_up(
 def price_compare(self, product_url: str, user_id: str, pooling_id: str):
     async def main_async_logic():
         try:
-            print(product_url, "<=====product_url")
-            print(user_id, "<=====user_id")
-            print(pooling_id, "<=====pooling_id")
-
             # ======================================================================
             # STEP1: Updating pooling status with pending
             # ======================================================================
@@ -625,7 +679,28 @@ def price_compare(self, product_url: str, user_id: str, pooling_id: str):
 
         except Exception as e:
             print("Unexpected worker error in price_compare as: ", e)
-            update_response = await update_pooling_status(
+            await update_pooling_status(
+                pooling_id=pooling_id,
+                status="failed",
+                data={"error": str(e)},
+            )
+
+    return run_async(main_async_logic())
+
+
+@celery_app.task(bind=True, max_retries=0)
+def visualization_iteration(
+    self, user_id: str, conversation_id: str, message: str, pooling_id: str
+):
+    async def main_async_logic():
+        try:
+            print(conversation_id, "<=====conversation_id")
+            print(user_id, "<=====user_id")
+            print(pooling_id, "<=====pooling_id")
+            print(message, "<=====message")
+        except Exception as e:
+            print("Unexpected worker error in visualization_iteration as: ", e)
+            await update_pooling_status(
                 pooling_id=pooling_id,
                 status="failed",
                 data={"error": str(e)},

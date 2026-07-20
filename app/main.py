@@ -34,6 +34,7 @@ app.add_middleware(
         "https://fashionifyai.vercel.app",
         "http://localhost:3000",
         "https://fashionifyai.app",
+        "https://www.fashionifyai.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],

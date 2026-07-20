@@ -810,7 +810,7 @@ def visualization_iteration(
                     pooling_id=pooling_id,
                     status="completed",
                     data={
-                        "itteration_result": {
+                        "iteration_result": {
                             "text": final_reply,
                             "role": "ai",
                             "images": [],
@@ -842,8 +842,11 @@ def visualization_iteration(
                 )
                 passing_context = [
                     {
-                        "type": "text",
-                        "text": f"Current user message: {message}\n\nHere are the image(s) being referred to:",
+                        "type": "input_text",
+                        "text": (
+                            f"Current user message: {message}\n\n"
+                            "Here are the image(s) being referred to:"
+                        ),
                     }
                 ]
 
@@ -852,33 +855,40 @@ def visualization_iteration(
                     image_ids = message_doc.image_ids
 
                     passing_context.append(
-                        {"type": "text", "text": f"Image {idx} (message_id: {msg_id}):"}
+                        {
+                            "type": "input_text",
+                            "text": f"Image {idx} (message_id: {msg_id}):",
+                        }
                     )
 
                     for img_id in image_ids:
                         image_doc = await get_image_by_image_id(image_id=img_id)
 
                         if message_doc.role == "user":
-                            image_url = await get_user_uploaded_images(
+                            image_url = get_user_uploaded_images(
                                 user_id=user_id,
                                 conversation_id=conversation_id,
-                                file_name=image_doc.file_name,
+                                file_name=image_doc.image_name,
                             )
-                        elif message_doc.role == "ai":
-                            image_url = await get_user_generated_images(
+                        else:  # message_doc.role == "ai"
+                            image_url = get_user_generated_images(
                                 user_id=user_id,
                                 conversation_id=conversation_id,
-                                file_name=image_doc.file_name,
+                                file_name=image_doc.image_name,
                             )
 
                         passing_context.append(
-                            {"type": "image_url", "image_url": {"url": image_url}}
+                            {
+                                "type": "input_image",
+                                "image_url": image_url,
+                            }
                         )
 
                 # ======================================================================
                 # STEP8: Generating response for feedback intent
                 # ======================================================================
                 print("STEP8: Generating response for feedback intent")
+
                 final_reply = llm_call_with_images(
                     custom_prompt=feedback_reply_prompt,
                     context=passing_context,
@@ -903,7 +913,7 @@ def visualization_iteration(
                     pooling_id=pooling_id,
                     status="completed",
                     data={
-                        "itteration_result": {
+                        "iteration_result": {
                             "text": final_reply,
                             "role": "ai",
                             "images": [],
@@ -934,10 +944,10 @@ def visualization_iteration(
                 )
                 image_ids = message_doc.image_ids
                 image_doc = await get_image_by_image_id(image_id=image_ids[0])
-                image_url = await get_user_generated_images(
+                image_url = get_user_generated_images(
                     user_id=user_id,
                     conversation_id=conversation_id,
-                    file_name=image_doc.file_name,
+                    file_name=image_doc.image_name,
                 )
 
                 # ======================================================================
@@ -948,7 +958,7 @@ def visualization_iteration(
                 )
                 enhanced_prompt = llm_call_without_images(
                     custom_prompt=edit_softener_prompt,
-                    context=f"User's edit request: {message}",
+                    context=f"User's edit request: {message} \n\n Prev Messaages: {context}",
                 )
 
                 prompt = f"""
@@ -1033,10 +1043,13 @@ def visualization_iteration(
                 print("STEP11: Calling OpenAI again to generate a contextual reply")
                 edit_final_reply_context = [
                     {
-                        "type": "text",
+                        "type": "input_text",
                         "text": f"User's original request: {message}\n\nHere is the updated image after the edit:",
                     },
-                    {"type": "image_url", "image_url": {"url": response["url"]}},
+                    {
+                        "type": "input_image",
+                        "image_url": response["url"],
+                    },
                 ]
                 final_reply = llm_call_with_images(
                     custom_prompt=edit_feedback_reply_prompt,
@@ -1070,7 +1083,7 @@ def visualization_iteration(
                     pooling_id=pooling_id,
                     status="completed",
                     data={
-                        "itteration_result": {
+                        "iteration_result": {
                             "text": final_reply,
                             "role": "ai",
                             "images": [response["url"]],

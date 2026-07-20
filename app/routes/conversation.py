@@ -15,7 +15,12 @@ from app.utils.imgkit import (
     get_user_uploaded_images,
     get_user_generated_images,
 )
-from app.workers.tasks import prestitched_seeon, link_seeon, dress_up
+from app.workers.tasks import (
+    prestitched_seeon,
+    link_seeon,
+    dress_up,
+    visualization_iteration,
+)
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
@@ -498,6 +503,32 @@ async def visualization_iteration_function(
     try:
         user = request.state.user
         user_id = user["id"]
+
+        conversation_id = body.conversation_id
+        message = body.message
+
+        # init pooling doc
+        new_pooling_doc = await init_pooling_doc(
+            user_id=user_id, pooling_type="iteration"
+        )
+
+        visualization_iteration.delay(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=message,
+            pooling_id=str(new_pooling_doc.pooling_id),
+        )
+
+        if new_pooling_doc:
+            response = {
+                "status": "success",
+                "pooling_id": str(new_pooling_doc.pooling_id),
+            }
+            return response
+        else:
+            response = {"status": "faliure", "pooling_id": ""}
+            return response
+
     except Exception as e:
         print(
             f"Unexpected error occured in router visualization_iteration_function as {e}"

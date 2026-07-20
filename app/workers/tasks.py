@@ -1,7 +1,12 @@
 from app.workers.celery import celery_app
 from app.workers.runtime import run_async
 from app.utils.imgkit import get_user_uploaded_images
-from app.ai.openai import generate_image
+from app.ai.openai import (
+    generate_image,
+    tool_call,
+    llm_call_without_images,
+    llm_call_with_images,
+)
 from app.ai.gemini import call_gemini_llm
 from app.ai.prompts.user_see_on import (
     user_see_on_prompt,
@@ -14,17 +19,35 @@ from app.ai.prompts.user_dress_up import (
     gemini_final_prompt_generation_prompt,
 )
 from app.ai.prompts.price_comparison import gemini_price_comparison_prompt
-from app.utils.imgkit import upload_generated_see_on_image
+from app.ai.prompts.intent_analyzer import intent_clasifier_prompt
+from app.ai.prompts.irrelevant_reply import irrelevant_reply_prompt
+from app.ai.prompts.feedback_reference import feedback_reference_prompt
+from app.ai.prompts.feedback_reply import feedback_reply_prompt
+from app.ai.prompts.edit_reference import edit_reference_prompt
+from app.ai.prompts.edit_softner_enhancer import edit_softener_prompt
+from app.ai.prompts.edit_reply import edit_feedback_reply_prompt
+from app.utils.imgkit import (
+    upload_generated_see_on_image,
+    get_user_uploaded_images,
+    get_user_generated_images,
+)
 from app.database.queries.pooling import update_pooling_status
-from app.database.queries.messages import add_image_message, get_first_message
-from app.database.queries.images import save_user_uploaded_images
+from app.database.queries.messages import (
+    add_image_message,
+    get_first_message,
+    get_last_20_messages,
+    get_message_by_message_id,
+)
+from app.database.queries.images import save_user_uploaded_images, get_image_by_image_id
 from app.database.queries.conversations import update_conversation_title
 from app.database.queries.models import get_model_document_by_id
 from app.database.queries.comparison_analytics import save_comparison_analytics
 from app.utils.scraper import scrape_product
 from app.utils.comparison_scraper import scrape_price_comparison
 from app.ai.prompts.dress_up_config import DRESS_DESCRIPTIONS
+from app.ai.tools import intent_tool
 
+from beanie import PydanticObjectId
 from pydantic import BaseModel
 import json
 
@@ -694,10 +717,369 @@ def visualization_iteration(
 ):
     async def main_async_logic():
         try:
-            print(conversation_id, "<=====conversation_id")
-            print(user_id, "<=====user_id")
-            print(pooling_id, "<=====pooling_id")
-            print(message, "<=====message")
+            # ======================================================================
+            # STEP1: Updating pooling status with pending
+            # ======================================================================
+            print("STEP1: Updating pooling status with pending")
+            await update_pooling_status(
+                pooling_id=pooling_id,
+                status="pending",
+                data={},
+            )
+
+            # ======================================================================
+            # STEP2: Saving the user message in the DB
+            # ======================================================================
+            print("STEP2: Saving the user message in the DB")
+            added_message = await add_image_message(
+                conversation_id=conversation_id,
+                role="user",
+                text=message,
+                image_ids=[],
+            )
+
+            # ======================================================================
+            # STEP3: Fetching upto last 20 messages
+            # ======================================================================
+            print("STEP3: Fetching & Cleaning upto last 20 messages")
+            latest_messages = await get_last_20_messages(
+                conversation_id=conversation_id
+            )
+
+            processed_message_history = []
+            for msg in latest_messages:
+                updated_message_object = {
+                    "role": msg.role,
+                    "text": msg.text,
+                    "image_ids": msg.image_ids,
+                    "message_id": str(msg.message_id),
+                }
+                processed_message_history.append(updated_message_object)
+
+            # ======================================================================
+            # STEP4: Making tools call to determine if the intent is: irrelevant | feedback | edit
+            # ======================================================================
+            print(
+                "STEP4: Making tools call to determine if the intent is: irrelevant | feedback | edit"
+            )
+            context = json.dumps(processed_message_history)
+            tools_response = tool_call(
+                tools=[intent_tool],
+                custom_prompt=intent_clasifier_prompt,
+                context=context,
+            )
+
+            intent = tools_response["intent"]
+            reasoning = tools_response["reasoning"]
+
+            print(f"Intent found: {intent}")
+            print(f"Reason behind the intent: {reasoning}")
+
+            # ======================================================================
+            # STEP5: Orchestrating based on intent
+            # ======================================================================
+            print("STEP5: Orchestrating based on intent")
+
+            if intent == "irrelevant":
+                # ======================================================================
+                # STEP6: Generating response for irrelevant intent
+                # ======================================================================
+                print("STEP6: Generating response for irrelevant intent")
+
+                final_reply = llm_call_without_images(
+                    custom_prompt=irrelevant_reply_prompt,
+                    context=f"Conversation history:\n{context} \n\nCurrent message:\n{message} \n\nReason for Intent: \n{reasoning}",
+                )
+
+                # ======================================================================
+                # STEP7: Saving the generated message in the DB
+                # ======================================================================
+                print("STEP7: Saving the generated message in the DB")
+                added_message = await add_image_message(
+                    conversation_id=conversation_id,
+                    role="ai",
+                    text=final_reply,
+                    image_ids=[],
+                )
+
+                # ======================================================================
+                # STEP8: Updating the pooling doc along with the response
+                # ======================================================================
+                print("STEP8: Updating the pooling doc along with the response")
+                await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="completed",
+                    data={
+                        "itteration_result": {
+                            "text": final_reply,
+                            "role": "ai",
+                            "images": [],
+                            "message_id": str(added_message.message_id),
+                        },
+                        "status": "success",
+                    },
+                )
+
+            elif intent == "feedback":
+                # ======================================================================
+                # STEP6: Checking which message image or messages image needs feedback on
+                # ======================================================================
+                print(
+                    "STEP6: Checking which message image or messages image needs feedback on"
+                )
+                message_ids_string = llm_call_without_images(
+                    custom_prompt=feedback_reference_prompt,
+                    context=f"Conversation history:\n{context} \n\nCurrent message:\n{message}",
+                )
+
+                message_ids = json.loads(message_ids_string)
+
+                # ======================================================================
+                # STEP7: Fetch image documents and group image URLs by message
+                # ======================================================================
+                print(
+                    "STEP7: Fetching image documents and grouping image URLs by message..."
+                )
+                passing_context = [
+                    {
+                        "type": "text",
+                        "text": f"Current user message: {message}\n\nHere are the image(s) being referred to:",
+                    }
+                ]
+
+                for idx, msg_id in enumerate(message_ids, start=1):
+                    message_doc = await get_message_by_message_id(message_id=msg_id)
+                    image_ids = message_doc.image_ids
+
+                    passing_context.append(
+                        {"type": "text", "text": f"Image {idx} (message_id: {msg_id}):"}
+                    )
+
+                    for img_id in image_ids:
+                        image_doc = await get_image_by_image_id(image_id=img_id)
+
+                        if message_doc.role == "user":
+                            image_url = await get_user_uploaded_images(
+                                user_id=user_id,
+                                conversation_id=conversation_id,
+                                file_name=image_doc.file_name,
+                            )
+                        elif message_doc.role == "ai":
+                            image_url = await get_user_generated_images(
+                                user_id=user_id,
+                                conversation_id=conversation_id,
+                                file_name=image_doc.file_name,
+                            )
+
+                        passing_context.append(
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        )
+
+                # ======================================================================
+                # STEP8: Generating response for feedback intent
+                # ======================================================================
+                print("STEP8: Generating response for feedback intent")
+                final_reply = llm_call_with_images(
+                    custom_prompt=feedback_reply_prompt,
+                    context=passing_context,
+                )
+
+                # ======================================================================
+                # STEP9: Saving the generated message in the DB
+                # ======================================================================
+                print("STEP9: Saving the generated message in the DB")
+                added_message = await add_image_message(
+                    conversation_id=conversation_id,
+                    role="ai",
+                    text=final_reply,
+                    image_ids=[],
+                )
+
+                # ======================================================================
+                # STEP10: Updating the pooling doc along with the response
+                # ======================================================================
+                print("STEP10: Updating the pooling doc along with the response")
+                await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="completed",
+                    data={
+                        "itteration_result": {
+                            "text": final_reply,
+                            "role": "ai",
+                            "images": [],
+                            "message_id": str(added_message.message_id),
+                        },
+                        "status": "success",
+                    },
+                )
+
+            elif intent == "edit":
+                # ======================================================================
+                # STEP6: Checking which message image or messages image needs edit on
+                # ======================================================================
+                print(
+                    "STEP6: Checking which message image or messages image needs edit on"
+                )
+                message_id_string = llm_call_without_images(
+                    custom_prompt=edit_reference_prompt,
+                    context=f"Conversation history:\n{context} \n\nCurrent message:\n{message}",
+                )
+
+                # ======================================================================
+                # STEP7: Getting image_url from the message_id
+                # ======================================================================
+                print("STEP7: Getting image_url from the message_id")
+                message_doc = await get_message_by_message_id(
+                    message_id=message_id_string
+                )
+                image_ids = message_doc.image_ids
+                image_doc = await get_image_by_image_id(image_id=image_ids[0])
+                image_url = await get_user_generated_images(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    file_name=image_doc.file_name,
+                )
+
+                # ======================================================================
+                # STEP8: Generating the new enhanced and softened prompt for image edit
+                # ======================================================================
+                print(
+                    "STEP8: Generating the new enhanced and softened prompt for image edit"
+                )
+                enhanced_prompt = llm_call_without_images(
+                    custom_prompt=edit_softener_prompt,
+                    context=f"User's edit request: {message}",
+                )
+
+                prompt = f"""
+                    IMAGE REFERENCES:
+                    The image is the identity and composition reference for the subject.
+
+                    TASK:
+                    {enhanced_prompt}
+
+                    GARMENT PRESERVATION RULES:
+                    Use each garment reference only for its corresponding garment.
+                    Preserve exactly:
+                    - colors
+                    - fabric
+                    - texture
+                    - embroidery
+                    - prints
+                    - stitching
+                    - borders
+                    - trims
+                    - embellishments
+                    - logos
+                    - patterns
+                    Do not redesign, simplify, replace, merge, or invent any garment.
+
+                    FIT & DRAPING:
+                    Resize and naturally fit the supplied garments to the model's body while preserving their design.
+                    Only adjust:
+                    - scale
+                    - draping
+                    - folding
+                    - natural fabric deformation
+                    Do not alter the garment construction.
+
+                    IDENTITY PRESERVATION:
+                    The first image defines the subject.
+                    Preserve exactly:
+                    - face
+                    - hairstyle
+                    - body proportions
+                    - pose
+                    - camera angle
+                    - framing
+                    - crop
+                    - perspective
+                    - lighting
+                    - background
+                    Maintain the identity and composition from Image 1. Render the subject naturally wearing the supplied outfit.
+
+                    SAFETY:
+                    The subject should appear naturally and completely dressed in the finished outfit.                
+                """.strip()
+
+                # ======================================================================
+                # STEP9: Generate the new Iteration Image
+                # ======================================================================
+                print("STEP9: Generating the new Iteration Image for this Conversation")
+                image_64_bytes = generate_image(
+                    model="gpt-image-1.5",
+                    prompt=prompt,
+                    image_urls=[image_url],
+                    user_id=user_id,
+                )
+
+                # ======================================================================
+                # STEP10: Upload the new Iteration Image
+                # ======================================================================
+                print(
+                    "STEP10: Uploading the new Iteration Up Image for this Conversation on Imgkit"
+                )
+                file_name = f"iteration_{str(PydanticObjectId())}.webp"
+                response = upload_generated_see_on_image(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    file_name=file_name,
+                    b64_image=image_64_bytes,
+                )
+
+                # ======================================================================
+                # STEP11: Calling OpenAI again to generate a contextual reply
+                # ======================================================================
+                print("STEP11: Calling OpenAI again to generate a contextual reply")
+                edit_final_reply_context = [
+                    {
+                        "type": "text",
+                        "text": f"User's original request: {message}\n\nHere is the updated image after the edit:",
+                    },
+                    {"type": "image_url", "image_url": {"url": response["url"]}},
+                ]
+                final_reply = llm_call_with_images(
+                    custom_prompt=edit_feedback_reply_prompt,
+                    context=edit_final_reply_context,
+                )
+
+                # ======================================================================
+                # STEP12: Saving the generated image in the images and messages collection
+                # ======================================================================
+                print(
+                    "STEP12: Saving the generated image in the images and messages collection"
+                )
+                image_doc = await save_user_uploaded_images(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    image_name=file_name,
+                )
+
+                added_message = await add_image_message(
+                    conversation_id=conversation_id,
+                    role="ai",
+                    text=final_reply,
+                    image_ids=[str(image_doc.image_id)],
+                )
+
+                # ======================================================================
+                # STEP13: Updating the pooling doc along with the response
+                # ======================================================================
+                print("STEP13: Updating the pooling doc along with the response")
+                await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="completed",
+                    data={
+                        "itteration_result": {
+                            "text": final_reply,
+                            "role": "ai",
+                            "images": [response["url"]],
+                            "message_id": str(added_message.message_id),
+                        },
+                        "status": "success",
+                    },
+                )
+
         except Exception as e:
             print("Unexpected worker error in visualization_iteration as: ", e)
             await update_pooling_status(

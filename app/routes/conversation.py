@@ -445,6 +445,46 @@ async def dress_up_generate_image(request: Request, body: DressUpRequest):
         print("Unexpected error occured generating first see-on image as", e)
 
 
+@router.post("/visualization/iteration")
+async def visualization_iteration_function(
+    request: Request, body: VisualizationIterationRequest
+):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+
+        conversation_id = body.conversation_id
+        message = body.message
+
+        # init pooling doc
+        new_pooling_doc = await init_pooling_doc(
+            user_id=user_id, pooling_type="iteration"
+        )
+
+        visualization_iteration.delay(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=message,
+            pooling_id=str(new_pooling_doc.pooling_id),
+        )
+
+        if new_pooling_doc:
+            response = {
+                "status": "success",
+                "pooling_id": str(new_pooling_doc.pooling_id),
+            }
+            return response
+        else:
+            response = {"status": "faliure", "pooling_id": ""}
+            return response
+
+    except Exception as e:
+        print(
+            f"Unexpected error occured in router visualization_iteration_function as {e}"
+        )
+        return None
+
+
 @router.get("/{conversation_id}")
 async def get_all_conversation_message(request: Request, conversation_id: str):
     try:
@@ -494,43 +534,3 @@ async def get_all_conversation_message(request: Request, conversation_id: str):
     except Exception as e:
         print("Unexpected error occured getting all message conversations as:", e)
         return {"status": "failure", "messages": []}
-
-
-@router.post("/visualization/iteration")
-async def visualization_iteration_function(
-    request: Request, body: VisualizationIterationRequest
-):
-    try:
-        user = request.state.user
-        user_id = user["id"]
-
-        conversation_id = body.conversation_id
-        message = body.message
-
-        # init pooling doc
-        new_pooling_doc = await init_pooling_doc(
-            user_id=user_id, pooling_type="iteration"
-        )
-
-        visualization_iteration.delay(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            message=message,
-            pooling_id=str(new_pooling_doc.pooling_id),
-        )
-
-        if new_pooling_doc:
-            response = {
-                "status": "success",
-                "pooling_id": str(new_pooling_doc.pooling_id),
-            }
-            return response
-        else:
-            response = {"status": "faliure", "pooling_id": ""}
-            return response
-
-    except Exception as e:
-        print(
-            f"Unexpected error occured in router visualization_iteration_function as {e}"
-        )
-        return None

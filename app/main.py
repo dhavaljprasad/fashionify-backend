@@ -30,7 +30,11 @@ app = FastAPI(title="FashionifyAI Backend", lifespan=lifespan)
 # CORS middleware - allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://fashionifyai.vercel.app", "http://localhost:3000"],
+    allow_origins=[
+        "https://fashionifyai.vercel.app",
+        "http://localhost:3000",
+        "https://fashionifyai.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

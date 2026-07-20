@@ -56,8 +56,9 @@ async def auth_signin(data: AuthSigninRequest):
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=False,  # True in prod
+            secure=True,  # True in prod
             samesite="lax",
+            domain=".fashionifyai.app",
             max_age=60 * 60 * 24 * 30,
             path="/",
         )

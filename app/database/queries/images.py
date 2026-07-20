@@ -73,3 +73,14 @@ async def get_all_user_images(user_id: str):
             e,
         )
         return None
+
+
+async def get_image_by_image_id(image_id: str):
+    try:
+        image_doc = await Images.find_one(Images.image_id == PydanticObjectId(image_id))
+        return image_doc
+    except Exception as e:
+        print(
+            f"Unexpected error occured in mongo function fetching image_doc by image_id as {e}"
+        )
+        return None

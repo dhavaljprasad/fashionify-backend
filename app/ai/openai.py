@@ -112,7 +112,12 @@ def llm_call_with_images(
             input=[
                 {
                     "role": "system",
-                    "content": custom_prompt,
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": custom_prompt,
+                        }
+                    ],
                 },
                 {
                     "role": "user",

@@ -25,3 +25,6 @@ class ConfigVariables:
 
     # Magic envs
     MAGIC_LINK: str = os.getenv("MAGIC_LINK")
+
+    # Environment envs
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT")

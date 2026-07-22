@@ -4,7 +4,8 @@ from pydantic import BaseModel
 import traceback
 
 from app.utils.auth import verify_google_creds, create_access_token
-from app.database.queries.users import save_or_update_user
+from app.database.queries.users import save_or_update_user, delete_user
+from app.config.variables import ConfigVariables
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -52,18 +53,30 @@ async def auth_signin(data: AuthSigninRequest):
             }
         )
 
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,  # True in prod
-            samesite="lax",
-            domain=".fashionifyai.app",
-            max_age=60 * 60 * 24 * 30,
-            path="/",
-        )
+        if ConfigVariables.ENVIRONMENT == "development":
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=False,
+                samesite="lax",
+                max_age=60 * 60 * 24 * 30,
+                path="/",
+            )
+            return response
 
-        return response
+        elif ConfigVariables.ENVIRONMENT == "production":
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=True,  # True in prod
+                samesite="lax",
+                domain=".fashionifyai.app",
+                max_age=60 * 60 * 24 * 30,
+                path="/",
+            )
+            return response
 
     except Exception as e:
         traceback.format_exc()
@@ -88,7 +101,7 @@ async def get_me(request: Request):
     }
 
 
-@router.post("/logout")
+@router.post("/sign-out")
 async def logout():
     response = JSONResponse(
         content={
@@ -97,12 +110,60 @@ async def logout():
         }
     )
 
-    response.delete_cookie(
-        key="access_token",
-        path="/",
-        # include these for consistency with how you set it
-        samesite="lax",
-        secure=False,  # True in production (HTTPS)
-    )
+    if ConfigVariables.ENVIRONMENT == "development":
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+            samesite="lax",
+            secure=False,
+        )
+        return response
+    elif ConfigVariables.ENVIRONMENT == "production":
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+            samesite="lax",
+            domain=".fashionifyai.app",
+            secure=True,
+        )
+        return response
 
-    return response
+
+@router.post("/delete")
+async def delete(request: Request):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+        user_email = user["email"]
+
+        await delete_user(user_id=user_id, user_email=user_email)
+
+        response = JSONResponse(
+            content={
+                "status": True,
+                "details": "Deleted & Logged out successfully",
+            }
+        )
+
+        if ConfigVariables.ENVIRONMENT == "development":
+            response.delete_cookie(
+                key="access_token",
+                path="/",
+                samesite="lax",
+                secure=False,
+            )
+            return response
+
+        elif ConfigVariables.ENVIRONMENT == "production":
+            response.delete_cookie(
+                key="access_token",
+                path="/",
+                samesite="lax",
+                domain=".fashionifyai.app",
+                secure=True,
+            )
+            return response
+
+    except Exception as e:
+        print(f"Unexpected error occured in route function auth_delete as: {e}")
+        return None

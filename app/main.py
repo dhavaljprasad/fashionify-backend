@@ -31,10 +31,9 @@ app = FastAPI(title="FashionifyAI Backend", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://fashionifyai.vercel.app",
-        "http://localhost:3000",
-        "https://fashionifyai.app",
         "https://www.fashionifyai.app",
+        "https://fashionifyai.app",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],

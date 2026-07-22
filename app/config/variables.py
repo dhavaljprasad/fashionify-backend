@@ -20,6 +20,14 @@ class ConfigVariables:
     IMGKIT_PUBLIC_KEY: str = os.getenv("IMGKIT_PUBLIC_KEY")
     IMGKIT_PRIVATE_KEY: str = os.getenv("IMGKIT_PRIVATE_KEY")
 
+    # Cloudfare R2 envs
+    R2_ACCESS_KEY_ID: str = os.getenv("R2_ACCESS_KEY_ID")
+    R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY")
+    R2_ENDPOINT: str = os.getenv("R2_ENDPOINT")
+    R2_BUCKET: str = os.getenv("R2_BUCKET")
+    R2_REGION: str = os.getenv("R2_REGION")
+    R2_PUBLIC_URL: str = os.getenv("R2_PUBLIC_URL")
+
     # Redis envs
     REDIS_URL: str = os.getenv("REDIS_URL")
 

@@ -32,8 +32,8 @@ def generate_image(
             model=model,
             image=image_files,
             prompt=prompt,
-            output_format="webp",  # use "webp", not "image/webp"
-            output_compression=80,
+            output_format="webp",
+            output_compression=90,
             quality="low",
             size="1024x1536",
             input_fidelity="low",

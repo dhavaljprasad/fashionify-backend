@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Request
 from app.database.queries.images import get_latest_user_images
 from app.database.queries.models import get_user_model_documents
-from app.utils.imgkit import get_user_uploaded_images, get_user_model_image
+
+# from app.utils.imgkit import get_user_uploaded_images, get_user_model_image
+from app.services.storage import R2Storage
 
 router = APIRouter(prefix="/app", tags=["App"])
 
@@ -17,7 +19,7 @@ async def get_user_models(request: Request):
 
         user_images = []
         for img_doc in user_images_docs:
-            img_url = get_user_uploaded_images(
+            img_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=str(img_doc.conversation_id),
                 file_name=img_doc.image_name,
@@ -30,7 +32,9 @@ async def get_user_models(request: Request):
 
         user_models = []
         for model_doc in user_models_docs:
-            img_url = get_user_model_image(user_id=user_id, file_name=model_doc.image)
+            img_url = R2Storage.get_user_model_image(
+                user_id=user_id, file_name=model_doc.image
+            )
             if model_doc.gender == "male":
                 model_object = {
                     "name": model_doc.model_name,

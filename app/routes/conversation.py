@@ -15,6 +15,7 @@ from app.utils.imgkit import (
     get_user_uploaded_images,
     get_user_generated_images,
 )
+from app.services.storage import R2Storage
 from app.workers.tasks import (
     prestitched_seeon,
     link_seeon,
@@ -23,6 +24,10 @@ from app.workers.tasks import (
 )
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
+
+
+class VisualizationInitRequest(BaseModel):
+    file_name: str
 
 
 class SaveImageRequest(BaseModel):
@@ -65,24 +70,42 @@ class VisualizationIterationRequest(BaseModel):
     message: str
 
 
-@router.get("/visualization/init")
-async def get_visualization_conversation_id(request: Request):
+class InitMultipleUploadRequest(BaseModel):
+    file_names: list[str]
+    conversation_id: str
+
+
+class InitUploadRequest(BaseModel):
+    file_name: list[str]
+    conversation_id: str
+
+
+@router.post("/visualization/init")
+async def get_visualization_conversation_id(
+    request: Request, body: VisualizationInitRequest
+):
     try:
         # getting user_id from the request-payload
         user = request.state.user
         user_id = user["id"]
+
+        file_name = body.file_name
 
         # getting new conversation document
         new_conversation_doc = await init_new_conversation_document(
             user_id=user_id, conversation_type="visualization"
         )
 
-        # getting auth creds for imagekit, client image upload
-        imgkit_auth = get_client_upload_auth_params()
+        # getting creds for r2 client upload
+        r2_creds = R2Storage.get_upload_image_presigned_url(
+            user_id=user_id,
+            conversation_id=str(new_conversation_doc.conversation_id),
+            file_name=file_name,
+        )
 
         return {
             "conversation_id": str(new_conversation_doc.conversation_id),
-            "imgkit_auth": imgkit_auth,
+            "r2_creds": r2_creds,
         }
 
     except Exception as e:
@@ -109,31 +132,48 @@ async def get_stylist_conversation_id(request: Request):
         print("Unexpected error occured generating conversation_id as: ", e)
 
 
-@router.get("/init-upload")
-async def get_upload_img_auth():
+@router.post("/init-upload")
+async def get_upload_img_auth(request: Request, body: InitUploadRequest):
     try:
-        # getting auth creds for imagekit, client image upload
-        imgkit_auth = get_client_upload_auth_params()
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
+        file_name = body.file_name
+        conversation_id = body.conversation_id
+
+        r2_creds = R2Storage.get_upload_image_presigned_url(
+            user_id=user_id, conversation_id=conversation_id, file_name=file_name
+        )
 
         return {
-            "imgkit_auth": imgkit_auth,
+            "r2_creds": r2_creds,
         }
+
     except Exception as e:
         print("Unexpected error occured getting img upload auth as:", e)
         return None
 
 
-@router.get("/init-multiple-uploads/{number}")
-async def get_multiple_img_auth(number: int = 3):
+@router.post("/init-multiple-uploads")
+async def get_multiple_img_auth(request: Request, body: InitMultipleUploadRequest):
     try:
-        imgkit_auths = []
-        for _ in range(number):
-            imgkit_auth = get_client_upload_auth_params()
-            if imgkit_auth:
-                imgkit_auths.append(imgkit_auth)
+        # getting user_id from the request-payload
+        user = request.state.user
+        user_id = user["id"]
+
+        file_names = body.file_names
+        conversation_id = body.conversation_id
+
+        r2_creds = []
+        for name in file_names:
+            r2_cred = R2Storage.get_upload_image_presigned_url(
+                user_id=user_id, conversation_id=conversation_id, file_name=name
+            )
+            r2_creds.append(r2_cred)
 
         return {
-            "imgkit_auths": imgkit_auths,
+            "r2_creds": r2_creds,
         }
     except Exception as e:
         print("Unexpected error occured getting img upload auth as:", e)
@@ -504,7 +544,7 @@ async def get_all_conversation_message(request: Request, conversation_id: str):
 
                 if msg.role == "user":
                     image_urls = [
-                        get_user_uploaded_images(
+                        R2Storage.get_user_uploaded_images(
                             user_id=user_id,
                             conversation_id=conversation_id,
                             file_name=name,
@@ -513,7 +553,7 @@ async def get_all_conversation_message(request: Request, conversation_id: str):
                     ]
                 elif msg.role == "ai":
                     image_urls = [
-                        get_user_generated_images(
+                        R2Storage.get_user_generated_images(
                             user_id=user_id,
                             conversation_id=conversation_id,
                             file_name=name,

@@ -8,6 +8,8 @@ from app.database.queries.models import (
     update_model_measurements,
 )
 from app.utils.imgkit import get_user_model_image, get_client_upload_auth_params
+from app.services.storage import R2Storage
+from app.services.storage import R2Storage
 
 router = APIRouter(prefix="/model", tags=["User Models"])
 
@@ -23,6 +25,10 @@ class UpdateModelRequest(BaseModel):
     model_id: str
     gender: str
     measurements: dict
+
+
+class ImageUploadRequest(BaseModel):
+    file_name: str
 
 
 @router.post("/init")
@@ -58,7 +64,9 @@ async def get_user_models_function(request: Request):
         model_list = []
         if model_docs and len(model_docs) > 0:
             for model in model_docs:
-                image_url = get_user_model_image(user_id=user_id, file_name=model.image)
+                image_url = R2Storage.get_user_model_image(
+                    user_id=user_id, file_name=model.image
+                )
 
                 if model.gender == "male":
                     model_object = {
@@ -84,17 +92,21 @@ async def get_user_models_function(request: Request):
         return {"status": "failure", "models": []}
 
 
-@router.get("/img-upload")
-async def get_image_auth_function(request: Request):
+@router.post("/img-upload")
+async def get_image_creds_function(request: Request, body: ImageUploadRequest):
     try:
         user = request.state.user
         user_id = user["id"]
 
+        file_name = body.file_name
+
         if user_id:
-            imgkit_auth = get_client_upload_auth_params()
+            r2_creds = R2Storage.get_model_image_presigned_url(
+                user_id=user_id, file_name=file_name
+            )
 
             return {
-                "imgkit_auth": imgkit_auth,
+                "r2_creds": r2_creds,
             }
     except Exception as e:
         print("Unexpected error occured getting upload image auth as: ", e)

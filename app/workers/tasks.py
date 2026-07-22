@@ -1,6 +1,5 @@
 from app.workers.celery import celery_app
 from app.workers.runtime import run_async
-from app.utils.imgkit import get_user_uploaded_images
 from app.ai.openai import (
     generate_image,
     tool_call,
@@ -26,11 +25,13 @@ from app.ai.prompts.feedback_reply import feedback_reply_prompt
 from app.ai.prompts.edit_reference import edit_reference_prompt
 from app.ai.prompts.edit_softner_enhancer import edit_softener_prompt
 from app.ai.prompts.edit_reply import edit_feedback_reply_prompt
-from app.utils.imgkit import (
-    upload_generated_see_on_image,
-    get_user_uploaded_images,
-    get_user_generated_images,
-)
+
+# from app.utils.imgkit import (
+#     upload_generated_see_on_image,
+#     get_user_uploaded_images,
+#     get_user_generated_images,
+# )
+from app.services.storage import R2Storage
 from app.database.queries.pooling import update_pooling_status
 from app.database.queries.messages import (
     add_image_message,
@@ -72,7 +73,7 @@ def prestitched_seeon(
             # STEP2: Load the user image for this conversation
             # ======================================================================
             print("STEP2: Loading User Image for this Conversation")
-            user_image_url = get_user_uploaded_images(
+            user_image_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_image.webp",
@@ -82,7 +83,7 @@ def prestitched_seeon(
             # STEP3: Load the user seeon image for this conversation
             # ======================================================================
             print("STEP3: Loading See On Image for this Conversation")
-            see_on_image_url = get_user_uploaded_images(
+            see_on_image_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_see_on_image.webp",
@@ -105,7 +106,7 @@ def prestitched_seeon(
             print(
                 "STEP5: Uploading the new Try On Image for this Conversation on Imgkit"
             )
-            response = upload_generated_see_on_image(
+            response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="generated_see_on.webp",
@@ -244,7 +245,7 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             # STEP6: Load the user image for this conversation
             # ======================================================================
             print("STEP6: Loading User Image for this Conversation")
-            user_image_url = get_user_uploaded_images(
+            user_image_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_image.webp",
@@ -288,7 +289,7 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             print(
                 "STEP10: Uploading the new Try On Image for this Conversation on Imgkit"
             )
-            response = upload_generated_see_on_image(
+            response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="generated_see_on.webp",
@@ -399,7 +400,7 @@ def dress_up(
             print("STEP2: Fetching fabric images from ImgKit")
             fabric_images = []
             for image in images:
-                fabric_image_url = get_user_uploaded_images(
+                fabric_image_url = R2Storage.get_user_uploaded_images(
                     user_id=user_id,
                     conversation_id=conversation_id,
                     file_name=f"{image}.webp",
@@ -410,7 +411,7 @@ def dress_up(
             # STEP3: Fetching model image from ImgKit
             # ======================================================================
             print("STEP3: Fetching model image from ImgKit")
-            model_image_url = get_user_uploaded_images(
+            model_image_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="user_image.webp",
@@ -539,7 +540,7 @@ def dress_up(
             print(
                 "STEP9: Uploading the new Dress Up Image for this Conversation on Imgkit"
             )
-            response = upload_generated_see_on_image(
+            response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
                 file_name="generated_see_on.webp",
@@ -865,13 +866,13 @@ def visualization_iteration(
                         image_doc = await get_image_by_image_id(image_id=img_id)
 
                         if message_doc.role == "user":
-                            image_url = get_user_uploaded_images(
+                            image_url = R2Storage.get_user_uploaded_images(
                                 user_id=user_id,
                                 conversation_id=conversation_id,
                                 file_name=image_doc.image_name,
                             )
                         else:  # message_doc.role == "ai"
-                            image_url = get_user_generated_images(
+                            image_url = R2Storage.get_user_generated_images(
                                 user_id=user_id,
                                 conversation_id=conversation_id,
                                 file_name=image_doc.image_name,
@@ -944,7 +945,7 @@ def visualization_iteration(
                 )
                 image_ids = message_doc.image_ids
                 image_doc = await get_image_by_image_id(image_id=image_ids[0])
-                image_url = get_user_generated_images(
+                image_url = R2Storage.get_user_generated_images(
                     user_id=user_id,
                     conversation_id=conversation_id,
                     file_name=image_doc.image_name,
@@ -1030,7 +1031,7 @@ def visualization_iteration(
                     "STEP10: Uploading the new Iteration Up Image for this Conversation on Imgkit"
                 )
                 file_name = f"iteration_{str(PydanticObjectId())}.webp"
-                response = upload_generated_see_on_image(
+                response = R2Storage.upload_generated_see_on_image(
                     user_id=user_id,
                     conversation_id=conversation_id,
                     file_name=file_name,

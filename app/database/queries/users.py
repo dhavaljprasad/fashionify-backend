@@ -6,7 +6,9 @@ from beanie import PydanticObjectId
 async def save_or_update_user(user_dict: Dict):
     try:
         # Checking if user already exists
-        user = await Users.find_one(Users.email == user_dict["email"])
+        user = await Users.find_one(
+            Users.email == user_dict["email"], Users.active == True
+        )
 
         # Updating if the user already exists
         if user:
@@ -53,3 +55,16 @@ async def update_user_profile(
     except Exception as e:
         print("Unexpected error occured updating user profile as:", e)
         return None
+
+
+async def delete_user(user_id: str, user_email: str):
+    try:
+        user_doc = await Users.find_one(
+            Users.user_id == PydanticObjectId(user_id), Users.email == user_email
+        )
+        user_doc.active = False
+
+        await user_doc.save()
+        return user_doc
+    except Exception as e:
+        print(f"Unexpected error occured in query function delete_user as: {e}")

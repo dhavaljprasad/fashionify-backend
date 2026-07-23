@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from app.database.queries.images import get_all_user_images
 from app.database.queries.conversations import get_conversation_doc
-from app.utils.imgkit import get_user_generated_images
+from app.services.storage import R2Storage
 
 router = APIRouter(prefix="/gallery", tags=["Gallery"])
 
@@ -23,7 +23,7 @@ async def get_user_gallery_function(request: Request):
                     )
 
                     image_obj = {
-                        "image_url": get_user_generated_images(
+                        "image_url": R2Storage.get_user_generated_images(
                             user_id=user_id,
                             conversation_id=str(image.conversation_id),
                             file_name=image.image_name,

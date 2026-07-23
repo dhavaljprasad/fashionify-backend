@@ -10,11 +10,6 @@ from app.database.queries.messages import add_image_message, get_all_message
 from app.database.queries.images import save_user_uploaded_images, get_bunch_images_name
 from app.database.queries.pooling import init_pooling_doc
 from app.database.queries.conversations import get_conversations_by_user_id
-from app.utils.imgkit import (
-    get_client_upload_auth_params,
-    get_user_uploaded_images,
-    get_user_generated_images,
-)
 from app.services.storage import R2Storage
 from app.workers.tasks import (
     prestitched_seeon,
@@ -22,6 +17,7 @@ from app.workers.tasks import (
     dress_up,
     visualization_iteration,
 )
+from app.config.variables import ConfigVariables
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
@@ -76,7 +72,7 @@ class InitMultipleUploadRequest(BaseModel):
 
 
 class InitUploadRequest(BaseModel):
-    file_name: list[str]
+    file_name: str
     conversation_id: str
 
 
@@ -381,8 +377,36 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
         parsed_url = urlparse(link)
         domain = parsed_url.netloc.lower()
 
-        # Check if the link belongs to ImageKit
-        if "ik.imagekit.io" in domain:
+        # Check if the link belongs to R2 Cloudfare or not
+        if ConfigVariables.ENVIRONMENT == "development" and ".r2.dev" in domain:
+            updated_conversation_doc = await update_conversation_type(
+                conversation_id=conversation_id, conversation_type="prestitched"
+            )
+
+            new_pooling_doc = await init_pooling_doc(
+                user_id=user_id, pooling_type="see_on"
+            )
+
+            prestitched_seeon.delay(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                pooling_id=str(new_pooling_doc.pooling_id),
+                link=link,
+            )
+
+            if updated_conversation_doc and new_pooling_doc:
+                response = {
+                    "status": "success",
+                    "pooling_id": str(new_pooling_doc.pooling_id),
+                }
+                return response
+            else:
+                response = {"status": "faliure", "pooling_id": ""}
+                return response
+        elif (
+            ConfigVariables.ENVIRONMENT == "production"
+            and "cdn.fashionifyai.app" in domain
+        ):
             updated_conversation_doc = await update_conversation_type(
                 conversation_id=conversation_id, conversation_type="prestitched"
             )

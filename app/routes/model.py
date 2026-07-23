@@ -7,7 +7,6 @@ from app.database.queries.models import (
     delete_model_document_by_id,
     update_model_measurements,
 )
-from app.utils.imgkit import get_user_model_image, get_client_upload_auth_params
 from app.services.storage import R2Storage
 from app.services.storage import R2Storage
 

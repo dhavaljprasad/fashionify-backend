@@ -25,12 +25,6 @@ from app.ai.prompts.feedback_reply import feedback_reply_prompt
 from app.ai.prompts.edit_reference import edit_reference_prompt
 from app.ai.prompts.edit_softner_enhancer import edit_softener_prompt
 from app.ai.prompts.edit_reply import edit_feedback_reply_prompt
-
-# from app.utils.imgkit import (
-#     upload_generated_see_on_image,
-#     get_user_uploaded_images,
-#     get_user_generated_images,
-# )
 from app.services.storage import R2Storage
 from app.database.queries.pooling import update_pooling_status
 from app.database.queries.messages import (
@@ -103,9 +97,7 @@ def prestitched_seeon(
             # ======================================================================
             # STEP5: Upload the new Try On Image
             # ======================================================================
-            print(
-                "STEP5: Uploading the new Try On Image for this Conversation on Imgkit"
-            )
+            print("STEP5: Uploading the new Try On Image for this Conversation on R2")
             response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -286,9 +278,7 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             # ======================================================================
             # STEP10: Upload the new Try On Image
             # ======================================================================
-            print(
-                "STEP10: Uploading the new Try On Image for this Conversation on Imgkit"
-            )
+            print("STEP10: Uploading the new Try On Image for this Conversation on R2")
             response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -395,22 +385,22 @@ def dress_up(
             )
 
             # ======================================================================
-            # STEP2: Fetching fabric images from ImgKit
+            # STEP2: Fetching fabric images from R2
             # ======================================================================
-            print("STEP2: Fetching fabric images from ImgKit")
+            print("STEP2: Fetching fabric images from R2")
             fabric_images = []
             for image in images:
                 fabric_image_url = R2Storage.get_user_uploaded_images(
                     user_id=user_id,
                     conversation_id=conversation_id,
-                    file_name=f"{image}.webp",
+                    file_name=f"{image}",
                 )
                 fabric_images.append(fabric_image_url)
 
             # ======================================================================
-            # STEP3: Fetching model image from ImgKit
+            # STEP3: Fetching model image from R2
             # ======================================================================
-            print("STEP3: Fetching model image from ImgKit")
+            print("STEP3: Fetching model image from R2")
             model_image_url = R2Storage.get_user_uploaded_images(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -537,9 +527,7 @@ def dress_up(
             # ======================================================================
             # STEP9: Upload the new Dress Up Image
             # ======================================================================
-            print(
-                "STEP9: Uploading the new Dress Up Image for this Conversation on Imgkit"
-            )
+            print("STEP9: Uploading the new Dress Up Image for this Conversation on R2")
             response = R2Storage.upload_generated_see_on_image(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -1028,7 +1016,7 @@ def visualization_iteration(
                 # STEP10: Upload the new Iteration Image
                 # ======================================================================
                 print(
-                    "STEP10: Uploading the new Iteration Up Image for this Conversation on Imgkit"
+                    "STEP10: Uploading the new Iteration Up Image for this Conversation on R2"
                 )
                 file_name = f"iteration_{str(PydanticObjectId())}.webp"
                 response = R2Storage.upload_generated_see_on_image(

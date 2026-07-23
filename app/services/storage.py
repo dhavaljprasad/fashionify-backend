@@ -97,6 +97,7 @@ class R2Storage:
                     "ContentType": "image/webp",
                 },
                 ExpiresIn=expires_in,
+                HttpMethod="PUT",
             )
 
             return {
@@ -126,6 +127,7 @@ class R2Storage:
                     "ContentType": "image/webp",
                 },
                 ExpiresIn=expires_in,
+                HttpMethod="PUT",
             )
 
             return {

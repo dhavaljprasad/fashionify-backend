@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Request
 from app.database.queries.images import get_latest_user_images
 from app.database.queries.models import get_user_model_documents
-
-# from app.utils.imgkit import get_user_uploaded_images, get_user_model_image
 from app.services.storage import R2Storage
 
 router = APIRouter(prefix="/app", tags=["App"])

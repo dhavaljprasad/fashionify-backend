@@ -1,5 +1,9 @@
 from celery import Celery
 from app.config.variables import ConfigVariables
+from dotenv import load_dotenv
+import os
+
+loaded = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
 
 celery_app = Celery(
     "worker",

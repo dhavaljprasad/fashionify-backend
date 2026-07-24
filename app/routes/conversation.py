@@ -310,7 +310,7 @@ async def save_dress_up_uploaded_images(
                 image_doc = await save_user_uploaded_images(
                     user_id=user_id,
                     conversation_id=conversation_id,
-                    image_name=f"{file_doc}.webp",
+                    image_name=f"{file_doc}",
                 )
                 if image_doc:
                     image_ids.append(str(image_doc.image_id))

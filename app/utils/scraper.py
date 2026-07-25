@@ -321,6 +321,22 @@ async def scrape_product(link: str):
                 timeout=60000,
             )
 
+            button = page.get_by_role("button", name="Continue shopping")
+
+            if await button.count() > 0:
+                print("[SCRAPER] Continue shopping page detected.")
+                await button.click()
+
+                # Wait for the next page to load
+                await page.wait_for_load_state("domcontentloaded")
+
+                print(f"[SCRAPER] After click URL: {page.url}")
+                print(f"[SCRAPER] After click Title: {await page.title()}")
+
+                await page.screenshot(
+                    path="after_continue.png",
+                    full_page=True,
+                )
             print("[SCRAPER] Navigation complete.")
 
             if response:

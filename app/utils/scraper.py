@@ -1,4 +1,5 @@
 from playwright.async_api import async_playwright
+import traceback
 
 
 async def extract_table_data(size_locator):
@@ -278,8 +279,11 @@ async def scrape_the_souled_store(page):
 
 
 async def scrape_product(link: str):
+    print("\n" + "=" * 80)
+    print(f"[SCRAPER] Starting scrape for: {link}")
 
     async with async_playwright() as p:
+        print("[SCRAPER] Launching Chromium...")
 
         browser = await p.chromium.launch(
             headless=True,
@@ -289,58 +293,141 @@ async def scrape_product(link: str):
             ],
         )
 
+        print("[SCRAPER] Chromium launched successfully.")
+
         page = await browser.new_page()
 
-        try:
+        # Debug listeners
+        page.on("console", lambda msg: print(f"[CONSOLE][{msg.type}] {msg.text}"))
 
-            await page.goto(
+        page.on("pageerror", lambda err: print(f"[PAGE ERROR] {err}"))
+
+        page.on(
+            "requestfailed",
+            lambda req: print(f"[REQUEST FAILED] {req.url} | {req.failure}"),
+        )
+
+        page.on(
+            "response",
+            lambda res: print(f"[RESPONSE] {res.status} {res.url}"),
+        )
+
+        try:
+            print("[SCRAPER] Navigating to page...")
+
+            response = await page.goto(
                 link,
                 wait_until="domcontentloaded",
                 timeout=60000,
             )
 
-            # Small buffer for lazy-loaded content
+            print("[SCRAPER] Navigation complete.")
+
+            if response:
+                print(f"[SCRAPER] HTTP Status: {response.status}")
+            else:
+                print("[SCRAPER] No response object returned.")
+
+            print(f"[SCRAPER] Final URL: {page.url}")
+
+            try:
+                title = await page.title()
+                print(f"[SCRAPER] Page Title: {title}")
+            except Exception as e:
+                print(f"[SCRAPER] Failed to read title: {e}")
+
+            try:
+                await page.screenshot(
+                    path="scraper_debug.png",
+                    full_page=True,
+                )
+                print("[SCRAPER] Screenshot saved to scraper_debug.png")
+            except Exception as e:
+                print(f"[SCRAPER] Screenshot failed: {e}")
+
+            print("[SCRAPER] Waiting 2 seconds...")
             await page.wait_for_timeout(2000)
 
             normalized_link = link.lower()
 
+            print(f"[SCRAPER] Detecting website... ({normalized_link})")
+
             if "amazon." in normalized_link or "amzn." in normalized_link:
+                print("[SCRAPER] Using Amazon scraper.")
                 result = await scrape_amazon(page)
 
             elif "flipkart." in normalized_link:
+                print("[SCRAPER] Using Flipkart scraper.")
                 result = await scrape_flipkart(page)
 
             elif "myntra." in normalized_link:
+                print("[SCRAPER] Using Myntra scraper.")
                 result = await scrape_myntra(page)
 
             elif "nykaafashion." in normalized_link:
+                print("[SCRAPER] Using Nykaa Fashion scraper.")
                 result = await scrape_naykaa_fashion(page)
 
             elif "wforwoman." in normalized_link:
+                print("[SCRAPER] Using WForWoman scraper.")
                 result = await scrape_og_image_brand(page)
 
             elif "shopforaurelia." in normalized_link:
-                result = await scrape_og_image_brand(page, table_index=1)
+                print("[SCRAPER] Using Aurelia scraper.")
+                result = await scrape_og_image_brand(
+                    page,
+                    table_index=1,
+                )
 
             elif "wishfulbyw." in normalized_link:
+                print("[SCRAPER] Using Wishful scraper.")
                 result = await scrape_og_image_brand(page)
 
             elif "elleven." in normalized_link:
+                print("[SCRAPER] Using Elleven scraper.")
                 result = await scrape_og_image_brand(page)
 
             elif "biba." in normalized_link:
-                result = await scrape_og_image_brand(page, "div.size-table table")
+                print("[SCRAPER] Using Biba scraper.")
+                result = await scrape_og_image_brand(
+                    page,
+                    "div.size-table table",
+                )
 
             elif "thesouledstore." in normalized_link:
+                print("[SCRAPER] Using The Souled Store scraper.")
                 result = await scrape_the_souled_store(page)
 
             elif "savana." in normalized_link:
+                print("[SCRAPER] Using Savana scraper.")
                 result = await scrape_og_image_brand(page)
 
             else:
                 raise ValueError(f"Unsupported website: {link}")
 
+            print("[SCRAPER] Scraping completed successfully.")
+            print(f"[SCRAPER] Result:\n{result}")
+
             return result
 
+        except Exception as e:
+            print("\n" + "=" * 80)
+            print("[SCRAPER ERROR]")
+            print(type(e).__name__)
+            print(e)
+            print(traceback.format_exc())
+
+            try:
+                html = await page.content()
+                print("\n[PAGE HTML PREVIEW]")
+                print(html[:3000])
+            except Exception as html_error:
+                print(f"Couldn't fetch page HTML: {html_error}")
+
+            raise
+
         finally:
+            print("[SCRAPER] Closing browser...")
             await browser.close()
+            print("[SCRAPER] Browser closed.")
+            print("=" * 80)

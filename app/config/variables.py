@@ -26,8 +26,8 @@ class ConfigVariables:
     # Redis envs
     REDIS_URL: str = os.getenv("REDIS_URL")
 
-    # Magic envs
-    MAGIC_LINK: str = os.getenv("MAGIC_LINK")
+    # Scraper Backend envs
+    SCRAPER_BACKEND: str = os.getenv("SCRAPER_BACKEND")
 
     # Environment envs
     ENVIRONMENT: str = os.getenv("ENVIRONMENT")

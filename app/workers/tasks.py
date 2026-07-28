@@ -41,10 +41,12 @@ from app.utils.scraper import scrape_product
 from app.utils.comparison_scraper import scrape_price_comparison
 from app.ai.prompts.dress_up_config import DRESS_DESCRIPTIONS
 from app.ai.tools import intent_tool
+from app.config.variables import ConfigVariables
 
 from beanie import PydanticObjectId
 from pydantic import BaseModel
 import json
+import httpx
 
 
 @celery_app.task(bind=True, max_retries=0)
@@ -180,7 +182,14 @@ def prestitched_seeon(
 
 
 @celery_app.task(bind=True, max_retries=0)
-def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: str):
+def link_seeon(
+    self,
+    conversation_id: str,
+    user_id: str,
+    pooling_id: str,
+    link: str,
+    access_token: str,
+):
     async def main_async_logic():
         try:
             # ======================================================================
@@ -197,7 +206,30 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
             # STEP2: Scraping the product data from the provided link
             # ======================================================================
             print("STEP2: Scraping the product data from the provided link")
-            scraped_data = await scrape_product(link)
+            scraped_data = None
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    f"{ConfigVariables.SCRAPER_BACKEND}/scraper/product",
+                    json={
+                        "link": link,
+                    },
+                    cookies={
+                        "access_token": access_token,
+                    },
+                )
+
+                response.raise_for_status()
+                scraped_data = response.json()
+
+            if scraped_data["status"] != "success":
+                update_response = await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="failed",
+                    data={"error": scraped_data["message"]},
+                )
+
+            scraped_data = scraped_data["data"]
 
             # ======================================================================
             # STEP3: Defining the output schema for Gemini LLM
@@ -352,7 +384,7 @@ def link_seeon(self, conversation_id: str, user_id: str, pooling_id: str, link: 
                 print(response, "final response")
 
         except Exception as e:
-            print("Unexpected worker error in prestitched_seeon as:", e)
+            print("Unexpected worker error in link_seeon as:", e)
             update_response = await update_pooling_status(
                 pooling_id=pooling_id,
                 status="failed",
@@ -612,7 +644,9 @@ def dress_up(
 
 
 @celery_app.task(bind=True, max_retries=0)
-def price_compare(self, product_url: str, user_id: str, pooling_id: str):
+def price_compare(
+    self, product_url: str, user_id: str, pooling_id: str, access_token: str
+):
     async def main_async_logic():
         try:
             # ======================================================================
@@ -629,7 +663,29 @@ def price_compare(self, product_url: str, user_id: str, pooling_id: str):
             # STEP2: Scraping the product data from the provided link
             # ======================================================================
             print("STEP2: Scraping the product data from the provided link")
-            scraped_data = await scrape_price_comparison(link=product_url)
+            scraped_data = None
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    f"{ConfigVariables.SCRAPER_BACKEND}/compare/price",
+                    json={
+                        "link": product_url,
+                    },
+                    cookies={
+                        "access_token": access_token,
+                    },
+                )
+
+                response.raise_for_status()
+                scraped_data = response.json()
+
+            if scraped_data["status"] != "success":
+                update_response = await update_pooling_status(
+                    pooling_id=pooling_id,
+                    status="failed",
+                    data={"error": scraped_data["message"]},
+                )
+
+            scraped_data = scraped_data["data"]
 
             # ======================================================================
             # STEP3: Defining the output schema for Gemini LLM
@@ -662,7 +718,7 @@ def price_compare(self, product_url: str, user_id: str, pooling_id: str):
             SCRAPED HTML
             ========================================
 
-            {scraped_data.model_dump_json(indent=2)}
+            {json.dumps(scraped_data)}
             """
 
             gemini_comparison_result = call_gemini_llm(

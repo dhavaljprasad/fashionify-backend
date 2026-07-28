@@ -369,6 +369,8 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
         user = request.state.user
         user_id = user["id"]
 
+        access_token = request.cookies.get("access_token")
+
         # getting params from body
         conversation_id = body.conversation_id
         link = body.link
@@ -434,9 +436,8 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
 
         else:
             print(
-                "The provided link does not belong to ImageKit. Proceeding with normal see-on flow."
+                "The provided link does not belong to R2. Proceeding with normal see-on flow."
             )
-            print("Provided link:", link)
             updated_conversation_doc = await update_conversation_type(
                 conversation_id=conversation_id, conversation_type="link"
             )
@@ -448,6 +449,7 @@ async def see_on_generate_image(request: Request, body: SeeOnRequest):
                 user_id=user_id,
                 pooling_id=str(new_pooling_doc.pooling_id),
                 link=link,
+                access_token=access_token,
             )
 
             if updated_conversation_doc and new_pooling_doc:

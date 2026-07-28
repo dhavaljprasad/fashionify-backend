@@ -17,6 +17,8 @@ async def get_price_comparison_function(request: Request, body: PriceCompareRequ
         user = request.state.user
         user_id = user["id"]
 
+        access_token = request.cookies.get("access_token")
+
         product_url = body.product_url
 
         new_pooling_doc = await init_pooling_doc(
@@ -27,6 +29,7 @@ async def get_price_comparison_function(request: Request, body: PriceCompareRequ
             product_url=product_url,
             user_id=user_id,
             pooling_id=str(new_pooling_doc.pooling_id),
+            access_token=access_token,
         )
 
         if new_pooling_doc:

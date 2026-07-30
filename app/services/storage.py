@@ -78,6 +78,16 @@ class R2Storage:
             print("Unexpected error uploading generated image:", e)
             return None
 
+    @staticmethod
+    def get_general_wardrobe_item(user_id: str, file_name: str):
+        key = f"{user_id}/uploads/wardrobe/general/{file_name}"
+        return R2Storage._object_url(key)
+
+    @staticmethod
+    def get_model_wardrobe_item(user_id: str, file_name: str, model_id: str):
+        key = f"{user_id}/uploads/wardrobe/{model_id}/{file_name}"
+        return R2Storage._object_url(key)
+
     # upload presigned functions
     @staticmethod
     def get_upload_image_presigned_url(
@@ -118,6 +128,67 @@ class R2Storage:
     ):
         try:
             key = f"{user_id}/uploads/models/{file_name}"
+
+            upload_url = r2.generate_presigned_url(
+                ClientMethod="put_object",
+                Params={
+                    "Bucket": R2Storage.bucket,
+                    "Key": key,
+                    "ContentType": "image/webp",
+                },
+                ExpiresIn=expires_in,
+                HttpMethod="PUT",
+            )
+
+            return {
+                "upload_url": upload_url,
+                "url": R2Storage._object_url(key),
+                "file_path": key,
+            }
+
+        except ClientError as e:
+            print("Unexpected error generating model upload presigned URL:", e)
+            return None
+
+    @staticmethod
+    def get_general_wardrobe_image_url(
+        user_id: str,
+        file_name: str,
+        expires_in: int = 600,
+    ):
+        try:
+            key = f"{user_id}/uploads/wardrobe/general/{file_name}"
+
+            upload_url = r2.generate_presigned_url(
+                ClientMethod="put_object",
+                Params={
+                    "Bucket": R2Storage.bucket,
+                    "Key": key,
+                    "ContentType": "image/webp",
+                },
+                ExpiresIn=expires_in,
+                HttpMethod="PUT",
+            )
+
+            return {
+                "upload_url": upload_url,
+                "url": R2Storage._object_url(key),
+                "file_path": key,
+            }
+
+        except ClientError as e:
+            print("Unexpected error generating model upload presigned URL:", e)
+            return None
+
+    @staticmethod
+    def get_model_wardrobe_image_url(
+        user_id: str,
+        file_name: str,
+        model_id: str,
+        expires_in: int = 600,
+    ):
+        try:
+            key = f"{user_id}/uploads/wardrobe/{model_id}/{file_name}"
 
             upload_url = r2.generate_presigned_url(
                 ClientMethod="put_object",

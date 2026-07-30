@@ -7,6 +7,7 @@ from app.routes.model import router as ModelRouter
 from app.routes.profile import router as ProfileRouter
 from app.routes.gallery import router as GalleryRouter
 from app.routes.compare import router as CompareRouter
+from app.routes.wardrobe import router as WardrobeRouter
 
 router = APIRouter(prefix="/api", tags=["Protected Routes"])
 
@@ -17,3 +18,4 @@ router.include_router(ModelRouter)
 router.include_router(ProfileRouter)
 router.include_router(GalleryRouter)
 router.include_router(CompareRouter)
+router.include_router(WardrobeRouter)

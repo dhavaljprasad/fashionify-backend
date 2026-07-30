@@ -7,6 +7,7 @@ from app.database.models.usage_events import Usage_Events
 from app.database.models.pooling import Pooling
 from app.database.models.models import Models
 from app.database.models.comparison_analytics import ComparisonAnalytics
+from app.database.models.wardrobe_items import WardrobeItems
 
 __all__ = [
     Users,
@@ -18,4 +19,5 @@ __all__ = [
     Pooling,
     Models,
     ComparisonAnalytics,
+    WardrobeItems,
 ]

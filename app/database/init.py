@@ -12,6 +12,7 @@ from app.database.models import (
     Pooling,
     Models,
     ComparisonAnalytics,
+    WardrobeItems,
 )
 
 _client: AsyncMongoClient | None = None
@@ -37,6 +38,7 @@ async def init_mongo():
             Pooling,
             Models,
             ComparisonAnalytics,
+            WardrobeItems,
         ],
     )
 

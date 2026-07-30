@@ -29,5 +29,8 @@ class ConfigVariables:
     # Scraper Backend envs
     SCRAPER_BACKEND: str = os.getenv("SCRAPER_BACKEND")
 
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY")
+    PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME")
+
     # Environment envs
     ENVIRONMENT: str = os.getenv("ENVIRONMENT")

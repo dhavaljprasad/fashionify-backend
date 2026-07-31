@@ -1,5 +1,6 @@
 from app.database.init import WardrobeItems
 from app.database.models.wardrobe_items import ImagesDict
+from beanie import PydanticObjectId
 
 
 async def add_wardrobe_items(
@@ -54,3 +55,21 @@ async def get_model_wardrobe_items(user_id: str, model_id: str):
             f"Unexpected error occurred in mongo function get_general_wardrobe_items: {e}"
         )
         return []
+
+
+async def delete_wardrobe_item(user_id: str, item_id: str):
+    try:
+        result = await WardrobeItems.find_one(
+            WardrobeItems.user_id == user_id,
+            WardrobeItems.item_id == PydanticObjectId(item_id),
+        )
+
+        if not result:
+            return False
+
+        await result.delete()
+        return True
+
+    except Exception as e:
+        print(f"Unexpected error occurred in mongo function delete_wardrobe_item: {e}")
+        return False

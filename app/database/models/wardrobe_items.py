@@ -167,7 +167,7 @@ class WardrobeItems(Document):
     item_name: str = ""
     metadata: Metadata
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_worn: datetime = None
+    last_worn: Optional[datetime] = None
 
     class Settings:
         name = "wardrobe_items"

@@ -102,3 +102,21 @@ async def upsert_wardrobe_item(
     except Exception as e:
         print(f"Error inserting wardrobe item into Pinecone: {e}")
         return False
+
+
+async def delete_wardrobe_item_pinecone(
+    user_id: str,
+    item_id: str,
+):
+    try:
+        wardrobe_index.delete(
+            filter={
+                "user_id": {"$eq": user_id},
+                "item_id": {"$eq": item_id},
+            }
+        )
+        return True
+
+    except Exception as e:
+        print(f"Error deleting wardrobe item from Pinecone: {e}")
+        return False

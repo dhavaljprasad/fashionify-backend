@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 from pydantic import BaseModel
-from app.config.variables import ConfigVariables
 from app.ai.prompts.wardrobe_processing import (
     wardrobe_processing_schema,
     wardrobe_processing_system_prompt,
@@ -10,9 +9,13 @@ from app.database.queries.wardrobe_items import (
     add_wardrobe_items,
     get_general_wardrobe_items,
     get_model_wardrobe_items,
+    delete_wardrobe_item,
 )
-from app.database.queries.models import get_user_model_documents
-from app.services.pinecone import upsert_wardrobe_item
+from app.database.queries.models import (
+    get_user_model_documents,
+    get_model_document_by_id,
+)
+from app.services.pinecone import upsert_wardrobe_item, delete_wardrobe_item_pinecone
 from app.services.storage import R2Storage
 from typing import Optional
 import asyncio
@@ -67,6 +70,10 @@ class WardrobeUploadRequest(BaseModel):
 class InitUploadRequest(BaseModel):
     file_names: list[str]
     model_id: Optional[str] = None
+
+
+class DeleteItemRequest(BaseModel):
+    item_id: str
 
 
 @router.post("/upload")
@@ -130,42 +137,105 @@ async def get_upload_img_auth(request: Request, body: InitUploadRequest):
 
 
 @router.get("/")
-async def get_all_user_wardrobe(request: Request):
+async def get_all_user_wardrobe(
+    request: Request,
+    model_id: Optional[str] = Query(default=None),
+):
     try:
         user = request.state.user
         user_id = user["id"]
 
         wardrobe = []
 
-        # -------------------------
-        # General Wardrobe
-        # -------------------------
-        general_wardrobe_docs = await get_general_wardrobe_items(user_id=user_id)
+        # --------------------------------------------------
+        # Specific wardrobe requested
+        # --------------------------------------------------
+        if model_id is not None:
+            # Empty string -> General wardrobe
+            if model_id.strip() == "general":
+                general_wardrobe_docs = await get_general_wardrobe_items(
+                    user_id=user_id
+                )
 
-        general_items = []
+                general_items = [
+                    {
+                        "name": doc.item_name,
+                        "image_url": R2Storage.get_general_wardrobe_item(
+                            user_id=user_id,
+                            file_name=doc.images.original_image,
+                        ),
+                        "item_id": str(doc.item_id),
+                    }
+                    for doc in general_wardrobe_docs
+                ]
 
-        for doc in general_wardrobe_docs:
-            general_items.append(
+                return {
+                    "title": "General",
+                    "items": general_items,
+                    "model_id": None,
+                }
+
+            # Model wardrobe
+            model = await get_model_document_by_id(
+                # user_id=user_id,
+                model_id=model_id,
+            )
+
+            if not model:
+                return []
+
+            model_docs = await get_model_wardrobe_items(
+                user_id=user_id,
+                model_id=model_id,
+            )
+
+            model_items = [
                 {
                     "name": doc.item_name,
-                    "image_url": R2Storage.get_general_wardrobe_item(
+                    "image_url": R2Storage.get_model_wardrobe_item(
                         user_id=user_id,
+                        model_id=model_id,
                         file_name=doc.images.original_image,
                     ),
                     "item_id": str(doc.item_id),
                 }
-            )
+                for doc in model_docs
+            ]
+
+            return {
+                "title": model.model_name,
+                "items": model_items,
+                "model_id": model_id,
+            }
+
+        # --------------------------------------------------
+        # Original behaviour: return all wardrobes
+        # --------------------------------------------------
+
+        # General wardrobe
+        general_wardrobe_docs = await get_general_wardrobe_items(user_id=user_id)
+
+        general_items = [
+            {
+                "name": doc.item_name,
+                "image_url": R2Storage.get_general_wardrobe_item(
+                    user_id=user_id,
+                    file_name=doc.images.original_image,
+                ),
+                "item_id": str(doc.item_id),
+            }
+            for doc in general_wardrobe_docs
+        ]
 
         wardrobe.append(
             {
                 "title": "General",
                 "items": general_items,
+                "model_id": None,
             }
         )
 
-        # -------------------------
-        # Model Wardrobes
-        # -------------------------
+        # Model wardrobes
         all_models = await get_user_model_documents(user_id=user_id)
 
         for model in all_models:
@@ -174,25 +244,24 @@ async def get_all_user_wardrobe(request: Request):
                 model_id=str(model.model_id),
             )
 
-            model_items = []
-
-            for doc in model_docs:
-                model_items.append(
-                    {
-                        "name": doc.item_name,
-                        "image_url": R2Storage.get_model_wardrobe_item(
-                            user_id=user_id,
-                            model_id=str(model.model_id),
-                            file_name=doc.images.original_image,
-                        ),
-                        "item_id": str(doc.item_id),
-                    }
-                )
+            model_items = [
+                {
+                    "name": doc.item_name,
+                    "image_url": R2Storage.get_model_wardrobe_item(
+                        user_id=user_id,
+                        model_id=str(model.model_id),
+                        file_name=doc.images.original_image,
+                    ),
+                    "item_id": str(doc.item_id),
+                }
+                for doc in model_docs
+            ]
 
             wardrobe.append(
                 {
-                    "title": model.name,  # replace with model.model_name if that's your field
+                    "title": model.model_name,
                     "items": model_items,
+                    "model_id": str(model.model_id),
                 }
             )
 
@@ -201,3 +270,31 @@ async def get_all_user_wardrobe(request: Request):
     except Exception as e:
         print(f"Unexpected error occurred in route function get_all_user_wardrobe: {e}")
         return []
+
+
+@router.post("/delete")
+async def delete_wardrobe_item_function(request: Request, body: DeleteItemRequest):
+    try:
+        user = request.state.user
+        user_id = user["id"]
+
+        item_id = body.item_id
+
+        # deleting mongo document
+        deleted_mongo = await delete_wardrobe_item(user_id=user_id, item_id=item_id)
+
+        # deleting pinecone document
+        deleted_pinecone = await delete_wardrobe_item_pinecone(
+            user_id=user_id, item_id=item_id
+        )
+
+        if deleted_mongo and deleted_pinecone:
+            return True
+
+        return False
+
+    except Exception as e:
+        print(
+            f"Unexpected error occured in route function delete_wardrobe_item as: {e}"
+        )
+        return None
